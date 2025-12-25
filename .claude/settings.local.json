@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(argon serve:*)",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)"
+    ]
+  }
+}

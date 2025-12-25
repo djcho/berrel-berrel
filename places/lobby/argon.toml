@@ -1,0 +1,24 @@
+# Argon 프로젝트 설정 - LOBBY PLACE
+# 이 파일은 전역 설정(~/.argon/config.toml)을 덮어씁니다.
+
+[global]
+# 서버 설정 (Lobby 전용 포트)
+host = "localhost"
+port = 8000
+run_async = false
+scan_ports = true
+
+# 개발 환경
+lua_extension = false    # .luau 확장자 사용
+smart_paths = true       # 경로 자동완성
+
+# Git/문서
+use_git = true
+include_docs = true
+
+# 패키지 관리
+use_wally = false        # Wally 사용 안 함
+use_selene = false       # Selene 린터 사용 안 함
+
+# TypeScript
+ts_mode = false          # Luau 사용
