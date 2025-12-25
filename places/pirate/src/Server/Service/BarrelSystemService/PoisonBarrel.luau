@@ -62,11 +62,21 @@ end
 
 -- 모델에 스크립트를 첨부하는 함수
 function PoisonBarrel:AttachScriptsToModel(modelClone)
-	
+
 	local modelDestroyer = ServerStorage.Scripts.ModelDestroyer:Clone()
-	modelDestroyer.Configuration.WaitTime.Value = 15
+
+	-- Configuration과 WaitTime을 Clone된 스크립트에 미리 생성
+	local configuration = Instance.new("Configuration")
+	configuration.Name = "Configuration"
+	configuration.Parent = modelDestroyer
+
+	local waitTime = Instance.new("IntValue")
+	waitTime.Name = "WaitTime"
+	waitTime.Value = 15
+	waitTime.Parent = configuration
+
 	modelDestroyer.Parent = modelClone
-	
+
 	local slower = ServerStorage.Scripts.Slower:Clone()
 	slower.Parent = modelClone
 end

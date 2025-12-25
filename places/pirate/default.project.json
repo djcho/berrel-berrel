@@ -8,10 +8,21 @@
     "ServerScriptService": {
       "$path": "src/Server"
     },
+    "ServerStorage": {
+      "Scripts": {
+        "$path": "src/ServerStorage/Scripts"
+      },
+      "Items": {
+        "$path": "src/ServerStorage/Items"
+      }
+    },
     "StarterPlayer": {
       "StarterPlayerScripts": {
         "$path": "src/Client"
       }
+    },
+    "StarterGui": {
+      "$path": "src/StarterGui"
     }
   }
 }

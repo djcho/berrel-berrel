@@ -228,7 +228,17 @@ function BaseBarrel:FloatOnWater(position)
 	barrelClone.Parent = workspace
 	
 	local modelDestroyer = ServerStorage.Scripts.ModelDestroyer:Clone()
-	modelDestroyer.Configuration.WaitTime.Value = 5
+
+	-- Configuration과 WaitTime을 Clone된 스크립트에 미리 생성
+	local configuration = Instance.new("Configuration")
+	configuration.Name = "Configuration"
+	configuration.Parent = modelDestroyer
+
+	local waitTime = Instance.new("IntValue")
+	waitTime.Name = "WaitTime"
+	waitTime.Value = 5
+	waitTime.Parent = configuration
+
 	modelDestroyer.Parent = barrelClone
 	
 end
