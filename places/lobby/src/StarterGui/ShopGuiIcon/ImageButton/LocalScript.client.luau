@@ -1,6 +1,23 @@
 local button = script.Parent
-local textLabel = button.Parent:FindFirstChild("TextLabel")
-local shopGui = script.Parent.Parent.Parent:FindFirstChild("ShopGui") -- ShopGui가 부모 객체에 있다고 가정
+local parent = button.Parent
+local shopGui = script.Parent.Parent.Parent:FindFirstChild("ShopGui")
+
+-- TextLabel 동적 생성
+local function createTextLabel()
+	local textLabel = Instance.new("TextLabel")
+	textLabel.Name = "TextLabel"
+	textLabel.Size = UDim2.new(0, 80, 0, 20)
+	textLabel.Position = UDim2.new(0.5, -40, 1, 5)
+	textLabel.BackgroundTransparency = 1
+	textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	textLabel.Text = "상점"
+	textLabel.TextSize = 14
+	textLabel.Font = Enum.Font.GothamBold
+	textLabel.Parent = parent
+	return textLabel
+end
+
+local textLabel = parent:FindFirstChild("TextLabel") or createTextLabel()
 
 -- 원래 크기와 위치 저장
 local originalButtonSize = button.Size

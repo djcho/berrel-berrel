@@ -1,3 +1,7 @@
 {
-  "className": "ScreenGui"
+  "className": "ScreenGui",
+  "properties": {
+    "ResetOnSpawn": false,
+    "ZIndexBehavior": {"Enum": ["ZIndexBehavior", "Sibling"]}
+  }
 }

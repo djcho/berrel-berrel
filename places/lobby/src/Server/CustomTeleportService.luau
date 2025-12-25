@@ -16,6 +16,12 @@ function CustomTeleportService:TeleportPlayer(player, placeId, teleportData)
 	assert(player and placeId and teleportData, "Player, Place ID, and Teleport Data는 필수입니다.")
 
 	local teleportOptions = Instance.new("TeleportOptions")
+
+	-- ReservedServer로 텔레포트하기 위해 accessCode 설정
+	if teleportData.serverId then
+		teleportOptions.ReservedServerAccessCode = teleportData.serverId
+	end
+
 	teleportOptions:SetTeleportData(teleportData)
 
 	local success, errorMessage = pcall(function()
@@ -35,6 +41,12 @@ function CustomTeleportService:TeleportPlayers(players, placeId, teleportData)
 	assert(players and placeId and teleportData, "Players, Place ID, and Teleport Data는 필수입니다.")
 
 	local teleportOptions = Instance.new("TeleportOptions")
+
+	-- ReservedServer로 텔레포트하기 위해 accessCode 설정
+	if teleportData.serverId then
+		teleportOptions.ReservedServerAccessCode = teleportData.serverId
+	end
+
 	teleportOptions:SetTeleportData(teleportData)
 
 	local success, errorMessage = pcall(function()
