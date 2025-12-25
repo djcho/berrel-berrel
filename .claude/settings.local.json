@@ -4,7 +4,16 @@
       "Bash(mkdir:*)",
       "Bash(argon serve:*)",
       "Bash(tasklist:*)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(cat:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\n게임방 시스템 버그 수정 및 GUI 동적 생성으로 전환\n\n- CustomTeleportService: ReservedServerAccessCode 추가로 예약 서버 텔레포트 수정\n- GameRoomInitializer: RemoteEvent 대신 player:GetJoinData\\(\\) 사용하여 텔레포트 데이터 처리\n- GameRoomSystem: 자동 스케일링 기능 추가 \\(방이 가득 차면 새 방 생성\\)\n- GameRoomService: 폴더 구조 변경 \\(init.luau 패턴으로 변경\\)\n- GUI: 코드로 동적 생성하도록 변경 \\(VSCode 개발 환경에 적합\\)\n  - GameRoomGui: GameList, CloseButton, TitleLabel 동적 생성\n  - ShopGuiIcon: TextLabel 동적 생성\n  - 반응형 레이아웃 적용 \\(화면 60% x 70%\\)\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push)",
+      "Bash(dir \"c:\\\\Users\\\\djcho\\\\Development\\\\berrel-berrel\\\\places\\\\pirate\\\\src\\\\StarterGui\")",
+      "Bash(copy \"C:\\\\Users\\\\djcho\\\\Desktop\\\\ShopNpcGui.rbxmx\" \"c:\\\\Users\\\\djcho\\\\Development\\\\berrel-berrel\\\\places\\\\pirate\\\\src\\\\StarterGui\\\\ShopNpcGui.rbxmx\")",
+      "Bash(dir:*)",
+      "Bash(taskkill:*)",
+      "Bash(netstat:*)"
     ]
   }
 }

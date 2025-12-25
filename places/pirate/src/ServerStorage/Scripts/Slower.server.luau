@@ -1,4 +1,4 @@
-local Zone = require(game:GetService("ReplicatedStorage"):WaitForChild("Zone"):WaitForChild("init"))
+local SimpleZone = require(game:GetService("ReplicatedStorage"):WaitForChild("SimpleZone"))
 local SlowZoneManager = require(game:GetService("ServerScriptService"):WaitForChild("SlowZoneManager"))
 
 local model = script.Parent
@@ -35,7 +35,7 @@ minBounds = minBounds
 maxBounds = maxBounds + Vector3.new(0, 50, 0)
 
 local region = Region3.new(minBounds, maxBounds)
-local zone = Zone.fromRegion(region.CFrame, region.Size)
+local zone = SimpleZone.fromRegion(region.CFrame, region.Size)
 
 -- 시각화용 Part 생성
 --local visualizationPart = Instance.new("Part")
@@ -73,6 +73,7 @@ local exitConnection = zone.playerExited:Connect(onPlayerExit)
 local function onModelRemoving()
 	enterConnection:Disconnect()
 	exitConnection:Disconnect()
+	zone:destroy()
 end
 
 model.AncestryChanged:Connect(function()
@@ -85,14 +86,12 @@ end)
 local function onPartRemoving()
 	enterConnection:Disconnect()
 	exitConnection:Disconnect()
+	zone:destroy()
 
 	-- SlowZoneManager에서 밟은 플레이어의 속도를 초기화
 	for player in pairs(playersInZone) do
 		SlowZoneManager:playerExitedZone(player)
 	end
-
-	-- 시각화 Part 제거
---	visualizationPart:Destroy()
 end
 
 bindableEvent.Event:Connect(onPartRemoving)
