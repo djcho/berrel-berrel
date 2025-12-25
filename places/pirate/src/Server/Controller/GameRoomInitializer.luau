@@ -16,6 +16,14 @@ function GameRoomInitializer:Initialize()
 	self.placeId = game.PlaceId
 	self.isInitialized = false
 
+	-- ServerIdEvent 생성 (클라이언트 호환성용)
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	if not ReplicatedStorage:FindFirstChild("ServerIdEvent") then
+		local serverIdEvent = Instance.new("RemoteEvent")
+		serverIdEvent.Name = "ServerIdEvent"
+		serverIdEvent.Parent = ReplicatedStorage
+	end
+
 	-- 플레이어 추가 이벤트 - 텔레포트 데이터에서 roomId 가져오기
 	Players.PlayerAdded:Connect(function(player)
 		self:onPlayerAdded(player)

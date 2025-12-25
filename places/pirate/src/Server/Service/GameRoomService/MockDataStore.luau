@@ -21,6 +21,15 @@ function MockDataStore:RemoveAsync(key)
 	self.data[key] = nil
 end
 
+function MockDataStore:UpdateAsync(key, transformFunction)
+	local currentValue = self.data[key]
+	local newValue = transformFunction(currentValue)
+	if newValue ~= nil then
+		self.data[key] = newValue
+	end
+	return newValue
+end
+
 function MockDataStore:ListKeysAsync()
 	local keys = {}
 	for key in pairs(self.data) do
