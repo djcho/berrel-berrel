@@ -116,7 +116,8 @@ ItemDb.Tool = {
 		MaxShots = 3,
 		ReloadTime = 2.5,
 		IconId = "rbxassetid://18946312844",
-		Model = ServerStorage.Tool.WindBarrel,
+		-- TODO: Studio에서 WindBarrel 파트 생성 후 변경
+		Model = ServerStorage.Tool:FindFirstChild("WindBarrel") or ServerStorage.Tool.NormalBarrel,
 		MaxStack = 1
 	}
 }
