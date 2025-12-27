@@ -48,8 +48,8 @@ end
 
 -- 기름을 독성 슬라임으로 변환
 function PoisonBarrel:ConvertOilToToxicSlime(oilModel)
-	-- 기름 모델 이름 변경 (독성 슬라임)
-	oilModel.Name = "ToxicSlime"
+	-- 기름 모델 이름 변경 (독성 슬라임) - ToxicOil로 해서 Oil 패턴 유지 (불 붙일 수 있게)
+	oilModel.Name = "ToxicOil"
 
 	-- 기름 파트들을 보라색으로 변경
 	for _, part in oilModel:GetChildren() do
@@ -57,6 +57,14 @@ function PoisonBarrel:ConvertOilToToxicSlime(oilModel)
 			part.Color = Color3.fromRGB(128, 0, 128)  -- 보라색
 			part.Material = Enum.Material.Neon
 		end
+	end
+
+	-- BindableEvent 생성 (PoisonDamage cleanup을 위해)
+	local existingBindable = oilModel:FindFirstChild("OnPartRemoving")
+	if not existingBindable then
+		local bindableEvent = Instance.new("BindableEvent")
+		bindableEvent.Name = "OnPartRemoving"
+		bindableEvent.Parent = oilModel
 	end
 
 	-- 독 데미지 스크립트 추가 (강화된 버전)

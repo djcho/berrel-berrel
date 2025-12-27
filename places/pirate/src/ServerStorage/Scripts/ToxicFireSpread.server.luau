@@ -104,9 +104,14 @@ local function TakeToxicDotDamage(humanoid, targetPlayer)
 		return
 	end
 
+	-- 같은 팀이면 데미지 안줌 (팀킬 방지)
+	if isSameTeamAsFireStarter(targetPlayer) then
+		return
+	end
+
 	-- 독성 화염 데미지: 일반보다 강함
 	for _ = 1, TOXIC_DOT_TICKS do
-		-- 매 데미지마다 creator 태그 갱신 (같은 팀이면 무시)
+		-- 매 데미지마다 creator 태그 갱신
 		setCreatorTag(humanoid, targetPlayer)
 		humanoid:TakeDamage(TOXIC_DOT_DAMAGE)
 		task.wait(1)

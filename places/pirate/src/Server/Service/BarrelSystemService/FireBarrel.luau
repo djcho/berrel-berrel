@@ -60,14 +60,21 @@ function FireBarrel:Explode(hitPart, hitPosition)
 				end
 			-- 기름 웅덩이는 기존 FireSpread 사용
 			elseif part.Parent.Name:match("Oil") then
-				if not part:FindFirstChild("FireSpread") then
-					local fireSpreadScript = ServerStorage.Scripts.FireSpread:Clone()
-					fireSpreadScript:SetAttribute("FireStarter", self.Player.Name)
-					fireSpreadScript.Parent = part
+				if not part:FindFirstChild("FireSpread") and not part:FindFirstChild("ToxicFireSpread") then
+					-- ToxicOil (기름+가스 콤보)이면 ToxicFireSpread 사용
+					local isToxicOil = part.Parent.Name:match("Toxic")
+					local fireScript
+					if isToxicOil then
+						fireScript = ServerStorage.Scripts.ToxicFireSpread:Clone()
+					else
+						fireScript = ServerStorage.Scripts.FireSpread:Clone()
+					end
+					fireScript:SetAttribute("FireStarter", self.Player.Name)
+					fireScript.Parent = part
 
 					local modelDestroyer = part.Parent:FindFirstChild("ModelDestroyer")
 					if modelDestroyer and modelDestroyer.Configuration and modelDestroyer.Configuration.WaitTime then
-						modelDestroyer.Configuration.WaitTime.Value = 10 -- 사라지는 시간을 10초로 초기화
+						modelDestroyer.Configuration.WaitTime.Value = isToxicOil and 12 or 10
 					end
 				end
 			end

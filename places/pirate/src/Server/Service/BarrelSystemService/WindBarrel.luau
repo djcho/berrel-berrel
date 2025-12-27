@@ -81,14 +81,19 @@ function WindBarrel:SpreadPoolsWithWind(explosionOrigin)
 				-- 가스 범위 확대 효과
 				for _, poisonPart in part.Parent:GetChildren() do
 					if poisonPart:IsA("BasePart") then
-						local originalSize = poisonPart:GetAttribute("OriginalSize")
-						if originalSize then
-							local newSize = originalSize * 1.3  -- 30% 확대
-							poisonPart:SetAttribute("OriginalSize", newSize)
-							local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Sine)
-							local tween = TweenService:Create(poisonPart, tweenInfo, {Size = newSize})
-							tween:Play()
-						end
+						-- PoisonFog는 OriginalSize가 없으므로 현재 Size 사용
+						local currentSize = poisonPart.Size
+						local newSize = currentSize * 1.3  -- 30% 확대
+						local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Sine)
+						local tween = TweenService:Create(poisonPart, tweenInfo, {Size = newSize})
+						tween:Play()
+					end
+				end
+
+				-- 불이 붙어있으면 WindBoosted 설정
+				for _, child in part.Parent:GetDescendants() do
+					if child.Name == "ToxicFireSpread" or child.Name == "FireSpread" then
+						child:SetAttribute("WindBoosted", true)
 					end
 				end
 
@@ -97,13 +102,11 @@ function WindBarrel:SpreadPoolsWithWind(explosionOrigin)
 				processedModels[part.Parent] = true
 				self:PushModel(part.Parent, explosionOrigin, 15)  -- 기름은 무거워서 덜 밀림
 
-			-- 불 붙은 곳에 바람 = 불 확산 가속
-			elseif part:FindFirstChild("FireSpread") or part:FindFirstChild("ToxicFireSpread") then
-				-- 불 확산 범위 증가 처리
-				local fireScript = part:FindFirstChild("FireSpread") or part:FindFirstChild("ToxicFireSpread")
-				if fireScript then
-					-- 바람으로 불 확산 가속 (확산 반경 일시적 증가)
-					fireScript:SetAttribute("WindBoosted", true)
+				-- 불이 붙어있으면 WindBoosted 설정
+				for _, child in part.Parent:GetDescendants() do
+					if child.Name == "FireSpread" then
+						child:SetAttribute("WindBoosted", true)
+					end
 				end
 			end
 		end
