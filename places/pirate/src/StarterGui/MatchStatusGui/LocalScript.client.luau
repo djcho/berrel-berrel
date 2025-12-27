@@ -159,6 +159,45 @@ local function hideStatusFrames()
 	teamFrame.Visible = false
 end
 
+-- 게임 중 타이머 (우측 상단)
+local timerFrame = Instance.new("Frame")
+timerFrame.Name = "TimerFrame"
+timerFrame.Size = UDim2.new(0, 120, 0, 50)
+timerFrame.Position = UDim2.new(1, -130, 0, 10)
+timerFrame.BackgroundColor3 = COLORS.woodDark
+timerFrame.BackgroundTransparency = 0.3
+timerFrame.Visible = false
+timerFrame.Parent = screenGui
+
+local timerCorner2 = Instance.new("UICorner")
+timerCorner2.CornerRadius = UDim.new(0, 10)
+timerCorner2.Parent = timerFrame
+
+local timerStroke2 = Instance.new("UIStroke")
+timerStroke2.Color = COLORS.goldDark
+timerStroke2.Thickness = 2
+timerStroke2.Parent = timerFrame
+
+local timerIcon = Instance.new("TextLabel")
+timerIcon.Size = UDim2.new(0, 30, 1, 0)
+timerIcon.Position = UDim2.new(0, 5, 0, 0)
+timerIcon.BackgroundTransparency = 1
+timerIcon.Text = "⏱️"
+timerIcon.TextSize = 20
+timerIcon.Parent = timerFrame
+
+local timerText = Instance.new("TextLabel")
+timerText.Name = "TimerText"
+timerText.Size = UDim2.new(1, -40, 1, 0)
+timerText.Position = UDim2.new(0, 35, 0, 0)
+timerText.BackgroundTransparency = 1
+timerText.TextColor3 = COLORS.white
+timerText.Text = "5:00"
+timerText.TextSize = 28
+timerText.Font = Enum.Font.GothamBlack
+timerText.TextXAlignment = Enum.TextXAlignment.Left
+timerText.Parent = timerFrame
+
 -- 상태 업데이트 함수
 local function updateStatus(data)
 	local teamCounts = data.teamCounts or { TeamA = 0, TeamB = 0 }
@@ -167,6 +206,7 @@ local function updateStatus(data)
 
 	if data.gameState == "waiting" then
 		showStatusFrames()
+		timerFrame.Visible = false
 		stateLabel.Text = "대기 중"
 		stateLabel.TextColor3 = COLORS.gold
 
@@ -184,6 +224,7 @@ local function updateStatus(data)
 
 	elseif data.gameState == "starting" then
 		showStatusFrames()
+		timerFrame.Visible = false
 		stateLabel.Text = "게임 시작!"
 		stateLabel.TextColor3 = COLORS.green
 
@@ -203,11 +244,28 @@ local function updateStatus(data)
 		tween:Play()
 
 	elseif data.gameState == "playing" then
-		-- 게임 중에는 상태 프레임 숨김
+		-- 게임 중에는 상태 프레임 숨기고 타이머만 표시
 		hideStatusFrames()
+		timerFrame.Visible = true
+
+		-- 남은 시간 표시
+		local remaining = data.matchTimeRemaining or 0
+		local mins = math.floor(remaining / 60)
+		local secs = math.floor(remaining % 60)
+		timerText.Text = string.format("%d:%02d", mins, secs)
+
+		-- 30초 이하면 빨간색
+		if remaining <= 30 then
+			timerText.TextColor3 = COLORS.red
+		elseif remaining <= 60 then
+			timerText.TextColor3 = COLORS.gold
+		else
+			timerText.TextColor3 = COLORS.white
+		end
 
 	elseif data.gameState == "ended" then
 		showStatusFrames()
+		timerFrame.Visible = false
 		stateLabel.Text = "게임 종료!"
 		stateLabel.TextColor3 = COLORS.gold
 

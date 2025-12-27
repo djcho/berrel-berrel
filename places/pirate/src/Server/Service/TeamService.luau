@@ -11,6 +11,20 @@ local Players = game:GetService("Players")
 local teamA = nil
 local teamB = nil
 
+-- 팀을 생성하거나 가져오는 함수
+local function createOrGetTeam(name, teamColor)
+	local team = TeamsService:FindFirstChild(name)
+	if not team then
+		team = Instance.new("Team")
+		team.Name = name
+		team.TeamColor = teamColor
+		team.AutoAssignable = false
+		team.Parent = TeamsService
+		print("[TeamService] 팀 생성: " .. name)
+	end
+	return team
+end
+
 -- 팀 객체를 안전하게 가져오는 함수
 local function getTeams()
 	if not teamA then
@@ -23,13 +37,9 @@ local function getTeams()
 end
 
 function TeamService:Initialize()
-	-- 팀이 생성될 때까지 대기
-	local tA, tB = getTeams()
-	if not tA or not tB then
-		warn("[TeamService] 팀이 아직 생성되지 않았습니다. 대기 중...")
-		teamA = TeamsService:WaitForChild("TeamA", 10)
-		teamB = TeamsService:WaitForChild("TeamB", 10)
-	end
+	-- 팀 생성 (없으면 생성)
+	teamA = createOrGetTeam("TeamA", BrickColor.new("Bright red"))
+	teamB = createOrGetTeam("TeamB", BrickColor.new("Bright blue"))
 
 	Players.PlayerAdded:Connect(function(player)
 		self:AssignTeam(player)

@@ -9,6 +9,9 @@ port = 8001
 run_async = false
 scan_ports = true
 
+# 동기화 방향 설정
+sync_back = false        # Studio -> VSCode 동기화 비활성화 (VSCode 우선)
+
 # 개발 환경
 lua_extension = false    # .luau 확장자 사용
 smart_paths = true       # 경로 자동완성

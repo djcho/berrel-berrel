@@ -45,6 +45,11 @@ local function startCooldown(toolName, icon, duration)
 		overlay.Position = UDim2.new(0, 0, 0, 0)
 	end
 
+	-- namedQueues[toolName]이 nil인 경우 초기화
+	if not namedQueues[toolName] then
+		namedQueues[toolName] = {}
+	end
+
 	while #namedQueues[toolName] > 0 do
 		local startTime = namedQueues[toolName][1]
 		local elapsed = tick() - startTime

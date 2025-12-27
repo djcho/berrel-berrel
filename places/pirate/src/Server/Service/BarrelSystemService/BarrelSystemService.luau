@@ -78,6 +78,26 @@ function BarrelSystemService:StartReload(player, toolName, _toolInfo, shotIndex)
 	end
 end
 
+-- 플레이어가 물속에 있는지 확인하는 함수 (수영 또는 잠수 상태)
+function BarrelSystemService:IsPlayerInWater(character)
+	if not character then
+		return false
+	end
+
+	local humanoid = character:FindFirstChild("Humanoid")
+	if not humanoid then
+		return false
+	end
+
+	-- Humanoid 상태로 수영/잠수 체크 (가장 정확함)
+	local state = humanoid:GetState()
+	if state == Enum.HumanoidStateType.Swimming then
+		return true
+	end
+
+	return false
+end
+
 -- 배럴 발사 처리 함수
 function BarrelSystemService:HandleThrowingBarrel(player, toolName, mouseHitPosition)
 	-- 1. 플레이어 캐릭터 존재 여부 검증
@@ -90,6 +110,11 @@ function BarrelSystemService:HandleThrowingBarrel(player, toolName, mouseHitPosi
 	local humanoid = character:FindFirstChild("Humanoid")
 	if not humanoid or humanoid.Health <= 0 then
 		warn("[BarrelSystem] 플레이어가 사망 상태입니다: " .. player.Name)
+		return
+	end
+
+	-- 물속에서는 통 던지기 불가
+	if self:IsPlayerInWater(character) then
 		return
 	end
 

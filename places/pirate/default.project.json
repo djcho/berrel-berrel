@@ -2,6 +2,12 @@
   "name": "pirate",
   "tree": {
     "$className": "DataModel",
+    "TextChatService": {
+      "$className": "TextChatService",
+      "$properties": {
+        "ChatVersion": "TextChatService"
+      }
+    },
     "ReplicatedStorage": {
       "$path": "src/Shared"
     },
@@ -23,9 +29,6 @@
     },
     "StarterGui": {
       "$path": "src/StarterGui"
-    },
-    "Teams": {
-      "$path": "src/Teams"
     }
   }
 }

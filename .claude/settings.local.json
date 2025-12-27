@@ -17,7 +17,10 @@
       "Bash(find:*)",
       "Bash(git -C \"c:\\\\Users\\\\djcho\\\\Development\\\\berrel-berrel\" commit -m \"$\\(cat <<''EOF''\n킬/어시스트 시스템 구현 및 DoT 밸런스 조정\n\n- 킬/어시스트 추적을 위한 creator 태그 시스템 추가\n  - BaseBarrel: SetCreatorTag 함수 추가\n  - FireSpread: 불 데미지 시 creator 태그 설정 + 팀킬 방지\n  - PoisonDamage: 독 데미지 시 creator 태그 설정 + 팀킬 방지\n- DoT 데미지 밸런스 조정\n  - FireBarrel DotDamage: 20 → 10\n  - FireSpread 틱 횟수: 4 → 3 \\(총 데미지 80 → 30\\)\n- 기름 배치 버그 수정\n  - 레이캐스트 시 Oil/Poison 모델 전체를 제외하도록 수정\n  - 기름 위에 기름이 겹쳐도 바닥에 배치되도록 개선\n- CommonUtil에 IsSameTeam, GetPlayerByPart 함수 추가\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(git -C \"c:\\\\Users\\\\djcho\\\\Development\\\\berrel-berrel\" push)",
-      "Bash(del \"c:\\\\Users\\\\djcho\\\\Development\\\\berrel-berrel\\\\places\\\\pirate\\\\src\\\\StarterGui\\\\MatchStatusGui\\\\LocalScript.client copy.luau\")"
+      "Bash(del \"c:\\\\Users\\\\djcho\\\\Development\\\\berrel-berrel\\\\places\\\\pirate\\\\src\\\\StarterGui\\\\MatchStatusGui\\\\LocalScript.client copy.luau\")",
+      "Bash(git commit:*)",
+      "Bash(git -C \"c:\\\\Users\\\\djcho\\\\Development\\\\berrel-berrel\" status --short)",
+      "Bash(git -C \"c:\\\\Users\\\\djcho\\\\Development\\\\berrel-berrel\" checkout -- \"places/pirate/src/StarterGui/MatchStatusGui/LocalScript.client.luau\")"
     ]
   }
 }

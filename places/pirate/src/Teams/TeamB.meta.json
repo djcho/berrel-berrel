@@ -1,7 +1,0 @@
-{
-  "className": "Team",
-  "properties": {
-    "TeamColor": "Bright blue",
-    "AutoAssignable": false
-  }
-}

@@ -97,7 +97,12 @@ function BaseBarrel:Throw(targetPosition, maxRange)
 
 	local startTime = tick()
 
-	-- 서버에서 투사체 위치 업데이트 (메모리 누수 수정)
+	-- 클라이언트에 투사체 생성 이벤트 전송 (렌더링은 클라이언트가 담당)
+	-- 서버 투사체는 판정용으로만 사용하고 투명하게 처리
+	throwingBarrelEvent:FireAllClients(self.BarrelPart, x0, v0, g, t)
+	self.BarrelPart.Transparency = 1  -- 서버 투사체 숨김 (클라이언트에서 렌더링)
+
+	-- 서버에서 투사체 위치 업데이트 (판정용, 시각적 렌더링은 클라이언트)
 	local heartbeatConnection
 	heartbeatConnection = RunService.Heartbeat:Connect(function()
 		-- 배럴이 이미 파괴되었는지 확인
@@ -116,9 +121,6 @@ function BaseBarrel:Throw(targetPosition, maxRange)
 		end
 		self.BarrelPart.Position = 0.5 * g * nt * nt + v0 * nt + x0
 	end)
-
-	-- 클라이언트에 투사체 생성 이벤트 전송
-	throwingBarrelEvent:FireAllClients(self.BarrelPart, x0, v0, g, t)
 end
 
 -- 배럴이 폭발하는 함수 (하위 클래스에서 재정의)

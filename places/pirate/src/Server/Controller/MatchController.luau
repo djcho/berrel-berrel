@@ -247,6 +247,12 @@ function MatchController:onPlayerDied(player)
 
 	self.deaths[player.Name] = (self.deaths[player.Name] or 0) + 1
 
+	-- leaderstats 실시간 업데이트 (Death)
+	local leaderstats = player:FindFirstChild("leaderstats")
+	if leaderstats and leaderstats:FindFirstChild("Death") then
+		leaderstats.Death.Value = self.deaths[player.Name]
+	end
+
 	local killerName = nil
 
 	-- 킬러 찾기 (Creator 태그 사용)
@@ -258,6 +264,15 @@ function MatchController:onPlayerDied(player)
 			if creator and creator.Value then
 				killerName = creator.Value.Name
 				self.kills[killerName] = (self.kills[killerName] or 0) + 1
+
+				-- leaderstats 실시간 업데이트 (Kill)
+				local killer = Players:FindFirstChild(killerName)
+				if killer then
+					local killerLeaderstats = killer:FindFirstChild("leaderstats")
+					if killerLeaderstats and killerLeaderstats:FindFirstChild("Kill") then
+						killerLeaderstats.Kill.Value = self.kills[killerName]
+					end
+				end
 
 				-- 킬 피드 알림
 				ReplicatedStorage.KillFeed:FireAllClients({
