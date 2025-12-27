@@ -23,6 +23,9 @@
     },
     "StarterGui": {
       "$path": "src/StarterGui"
+    },
+    "Teams": {
+      "$path": "src/Teams"
     }
   }
 }

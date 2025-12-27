@@ -1,3 +1,4 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local button = script.Parent
 local parent = button.Parent
 local playerGui = script.Parent.Parent.Parent
@@ -18,7 +19,7 @@ local function createTextLabel()
 	textLabel.Position = UDim2.new(0.5, -40, 1, 5)
 	textLabel.BackgroundTransparency = 1
 	textLabel.TextColor3 = COLORS.gold
-	textLabel.Text = "보물 상점"
+	textLabel.Text = "선원 모집"
 	textLabel.TextSize = 14
 	textLabel.Font = Enum.Font.GothamBold
 	textLabel.Parent = parent
@@ -74,17 +75,22 @@ button.MouseLeave:Connect(function()
 	)
 end)
 
--- 버튼 클릭 시 ShopGui 출력 (다른 GUI는 닫기)
+-- 버튼 클릭 시 GameRoomGui 열기 (다른 GUI는 닫기)
 button.MouseButton1Click:Connect(function()
-	-- 게임룸 GUI 닫기
+	-- 상점 GUI 닫기
+	if shopGui then
+		shopGui.Enabled = false
+	end
+	-- 게임룸 GUI 열기
 	if gameRoomGui then
 		local mainFrame = gameRoomGui:FindFirstChild("MainFrame")
 		if mainFrame then
-			mainFrame.Visible = false
+			mainFrame.Visible = true
+			-- 게임 목록 요청
+			local requestEvent = ReplicatedStorage:FindFirstChild("RequestGameList")
+			if requestEvent then
+				requestEvent:FireServer()
+			end
 		end
-	end
-	-- 상점 GUI 열기
-	if shopGui then
-		shopGui.Enabled = true
 	end
 end)

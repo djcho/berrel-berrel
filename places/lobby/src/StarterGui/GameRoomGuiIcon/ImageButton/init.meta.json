@@ -2,8 +2,8 @@
   "className": "ImageButton",
   "properties": {
     "Size": {"UDim2": [[0, 100], [0, 100]]},
-    "Position": {"UDim2": [[0, 20], [1, -130]]},
+    "Position": {"UDim2": [[0, 140], [1, -130]]},
     "BackgroundTransparency": 1,
-    "Image": "rbxassetid://111865988369771"
+    "Image": "rbxassetid://131431773353571"
   }
 }

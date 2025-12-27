@@ -13,7 +13,8 @@
       "Bash(copy \"C:\\\\Users\\\\djcho\\\\Desktop\\\\ShopNpcGui.rbxmx\" \"c:\\\\Users\\\\djcho\\\\Development\\\\berrel-berrel\\\\places\\\\pirate\\\\src\\\\StarterGui\\\\ShopNpcGui.rbxmx\")",
       "Bash(dir:*)",
       "Bash(taskkill:*)",
-      "Bash(netstat:*)"
+      "Bash(netstat:*)",
+      "Bash(find:*)"
     ]
   }
 }
