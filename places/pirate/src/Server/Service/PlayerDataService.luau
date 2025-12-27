@@ -18,6 +18,15 @@ local WindBarrelItem = require(ItemStorage.WindBarrelItem)
 local ItemDb = require(ItemStorage.Database.ItemDb)
 local UserData = require(ServerStorage.Scripts.UserData)
 
+-- ShopService 지연 로딩 (순환 참조 방지)
+local ShopService = nil
+local function getShopService()
+	if not ShopService then
+		ShopService = require(game:GetService("ServerScriptService"):WaitForChild("Service"):WaitForChild("ShopService"))
+	end
+	return ShopService
+end
+
 function PlayerDataService:Initialize()
 	Players.PlayerAdded:Connect(function(player)
 		self:OnPlayerJoined(player)
@@ -113,8 +122,15 @@ function PlayerDataService:OnPlayerJoined(player)
 	self:SetupLeaderstats(player)
 	UserData.AddPlayer(player, {
 		ToolStatus = {},
-		BarrelLevel = 1
+		BarrelLevel = 1,
+		UnlockedBarrels = { NormalBarrel = true },  -- 기본 통 해금
+		BarrelUpgrades = {},
 	})
+
+	-- ShopService 데이터 초기화
+	task.defer(function()
+		getShopService():InitializePlayerShopData(player)
+	end)
 
 	player.CharacterAdded:Connect(function(character)
 		self:OnCharacterAdded(character)

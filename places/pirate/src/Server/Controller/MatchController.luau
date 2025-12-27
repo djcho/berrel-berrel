@@ -28,6 +28,9 @@ local CONFIG = {
 	END_DELAY = 10,            -- 게임 종료 후 로비 이동까지 시간
 	BROADCAST_INTERVAL = 1,    -- 로비로 상태 전송 간격 (초) - 1초로 변경하여 실시간 카운트다운 표시
 	RESTART_DELAY = 5,         -- 게임 종료 후 다음 게임까지 대기 시간
+	-- 골드 보상 설정
+	GOLD_PER_KILL = 50,        -- 킬 당 골드
+	GOLD_PER_ASSIST = 20,      -- 어시스트 당 골드
 }
 
 local LOBBY_PLACE_ID = 18517272972
@@ -269,8 +272,14 @@ function MatchController:onPlayerDied(player)
 				local killer = Players:FindFirstChild(killerName)
 				if killer then
 					local killerLeaderstats = killer:FindFirstChild("leaderstats")
-					if killerLeaderstats and killerLeaderstats:FindFirstChild("Kill") then
-						killerLeaderstats.Kill.Value = self.kills[killerName]
+					if killerLeaderstats then
+						if killerLeaderstats:FindFirstChild("Kill") then
+							killerLeaderstats.Kill.Value = self.kills[killerName]
+						end
+						-- 킬 보상 골드 지급
+						if killerLeaderstats:FindFirstChild("Coins") then
+							killerLeaderstats.Coins.Value = killerLeaderstats.Coins.Value + CONFIG.GOLD_PER_KILL
+						end
 					end
 				end
 
@@ -293,6 +302,14 @@ function MatchController:onPlayerDied(player)
 		end
 		for assisterName, _ in pairs(assisters) do
 			self.assists[assisterName] = (self.assists[assisterName] or 0) + 1
+			-- 어시스트 보상 골드 지급
+			local assister = Players:FindFirstChild(assisterName)
+			if assister then
+				local assisterLeaderstats = assister:FindFirstChild("leaderstats")
+				if assisterLeaderstats and assisterLeaderstats:FindFirstChild("Coins") then
+					assisterLeaderstats.Coins.Value = assisterLeaderstats.Coins.Value + CONFIG.GOLD_PER_ASSIST
+				end
+			end
 		end
 		self.damageLog[player.Name] = {}
 	end

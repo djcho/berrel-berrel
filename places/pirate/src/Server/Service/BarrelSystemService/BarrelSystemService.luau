@@ -16,6 +16,15 @@ local WindBarrel = require(script.Parent.WindBarrel)
 local UserData = require(game.ServerStorage.Scripts.UserData)
 local ItemDb = require(game.ServerStorage.Items.Database.ItemDb)
 
+-- ShopService 참조 (업그레이드 스탯 적용용)
+local ShopService = nil
+local function getShopService()
+	if not ShopService then
+		ShopService = require(game.ServerScriptService.Service.ShopService)
+	end
+	return ShopService
+end
+
 local throwingBarrelEvent = ReplicatedStorage:WaitForChild("ThrowingBarrelEvent")
 
 -- RemoteEvent 및 RemoteFunction 설정
@@ -132,6 +141,15 @@ function BarrelSystemService:HandleThrowingBarrel(player, toolName, mouseHitPosi
 		return
 	end
 
+	-- 3.5. 통 해금 여부 검증
+	if not userData.UnlockedBarrels or not userData.UnlockedBarrels[toolName] then
+		-- 기본 통(NormalBarrel)은 항상 사용 가능
+		if toolName ~= "NormalBarrel" then
+			warn("[BarrelSystem] 해금되지 않은 통입니다: " .. toolName .. " (" .. player.Name .. ")")
+			return
+		end
+	end
+
 	-- 4. mouseHitPosition 유효성 검증
 	if typeof(mouseHitPosition) ~= "Vector3" then
 		warn("[BarrelSystem] 유효하지 않은 타겟 위치: " .. player.Name)
@@ -164,17 +182,31 @@ function BarrelSystemService:HandleThrowingBarrel(player, toolName, mouseHitPosi
 	-- 검증 통과 후 발사 처리
 	toolStatus.ShotLeft = toolStatus.ShotLeft - 1
 
+	-- 업그레이드 적용된 스탯 가져오기
+	local upgradedStats = getShopService():GetBarrelStats(player, toolName)
+	local effectiveToolInfo = {}
+	for k, v in pairs(toolInfo) do
+		effectiveToolInfo[k] = v
+	end
+	-- 업그레이드된 스탯 적용
+	if upgradedStats then
+		effectiveToolInfo.Damage = upgradedStats.Damage
+		effectiveToolInfo.MaxRange = upgradedStats.MaxRange
+		effectiveToolInfo.ReloadTime = upgradedStats.ReloadTime
+		effectiveToolInfo.MaxShots = upgradedStats.MaxShots
+	end
+
 	local barrel = nil
 	if toolName == "OilBarrel" then
-		barrel = OilBarrel.new(player, 1, toolInfo)
+		barrel = OilBarrel.new(player, 1, effectiveToolInfo)
 	elseif toolName == "FireBarrel" then
-		barrel = FireBarrel.new(player, 1, toolInfo)
+		barrel = FireBarrel.new(player, 1, effectiveToolInfo)
 	elseif toolName == "PoisonBarrel" then
-		barrel = PoisonBarrel.new(player, 1, toolInfo)
+		barrel = PoisonBarrel.new(player, 1, effectiveToolInfo)
 	elseif toolName == "WindBarrel" then
-		barrel = WindBarrel.new(player, 1, toolInfo)
+		barrel = WindBarrel.new(player, 1, effectiveToolInfo)
 	else
-		barrel = NormalBarrel.new(player, 1, toolInfo)
+		barrel = NormalBarrel.new(player, 1, effectiveToolInfo)
 	end
 
 	barrel:Throw(mouseHitPosition)
