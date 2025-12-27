@@ -1,3 +1,6 @@
+-- ToxicFireSpread: 독 웅덩이에 불이 붙었을 때 초록색 독성 화염 생성
+-- 일반 화염보다 강한 데미지를 줌
+
 if script.Parent.Name == "Part" then
 	return
 end
@@ -10,9 +13,11 @@ local CommonUtil = require(ServerStorage.Scripts.CommonUtil)
 local fireStarterName = script:GetAttribute("FireStarter")
 local fireStarter = fireStarterName and Players:FindFirstChild(fireStarterName)
 
-local BASE_SPREAD_RADIUS = 10  -- 기본 불 확산 반경
-local SPREAD_INTERVAL = 0.5  -- 확산 체크 간격 (성능 개선)
-local WIND_BOOST_RADIUS = 18  -- 바람 부스트 시 확산 반경
+local BASE_SPREAD_RADIUS = 12  -- 기본 독성 화염 확산 반경 (일반보다 넓음)
+local SPREAD_INTERVAL = 0.5  -- 확산 체크 간격
+local WIND_BOOST_RADIUS = 20  -- 바람 부스트 시 확산 반경
+local TOXIC_DOT_DAMAGE = 15  -- 독성 화염 틱당 데미지 (일반 화염 10 + 독 5 = 15)
+local TOXIC_DOT_TICKS = 4  -- 데미지 틱 횟수 (일반보다 1회 더)
 
 local burningEndFlag = false
 
@@ -33,7 +38,7 @@ local function attachFireToTarget(targetPart)
 	-- 사라지는 시간을 초기화하는 처리 추가
 	local modelDestroyer = targetPart.Parent:FindFirstChild("ModelDestroyer")
 	if modelDestroyer and modelDestroyer.Configuration and modelDestroyer.Configuration.WaitTime then
-		modelDestroyer.Configuration.WaitTime.Value = 10 -- 사라지는 시간을 10초로 초기화
+		modelDestroyer.Configuration.WaitTime.Value = 12 -- 독성 화염은 12초 지속
 	end
 end
 
@@ -48,11 +53,12 @@ local function Burning()
 
 		for _, SpreadPart in partsInRadius do
 			if CommonUtil:IsPartIncludedCharacter(SpreadPart) then
-				if not SpreadPart.Parent:FindFirstChild("FireSpread", true) then
+				-- 캐릭터에는 일반 FireSpread와 ToxicFireSpread 둘 다 확인
+				if not SpreadPart.Parent:FindFirstChild("FireSpread", true) and not SpreadPart.Parent:FindFirstChild("ToxicFireSpread", true) then
 					attachFireToTarget(SpreadPart)
 				end
 			elseif SpreadPart:FindFirstChild("burnable") then
-				if not SpreadPart:FindFirstChild("FireSpread") then
+				if not SpreadPart:FindFirstChild("FireSpread") and not SpreadPart:FindFirstChild("ToxicFireSpread") then
 					attachFireToTarget(SpreadPart)
 				end
 			end
@@ -93,49 +99,62 @@ local function setCreatorTag(humanoid, targetPlayer)
 	game.Debris:AddItem(creator, 5)
 end
 
-local function TakeDotDamage(humanoid, tickDamage, targetPlayer)
+local function TakeToxicDotDamage(humanoid, targetPlayer)
 	if not humanoid then
 		return
 	end
 
-	if tickDamage == nil or tickDamage <= 0 then
-		tickDamage = 3
-	end
-
-	for _ = 1, 3 do
+	-- 독성 화염 데미지: 일반보다 강함
+	for _ = 1, TOXIC_DOT_TICKS do
 		-- 매 데미지마다 creator 태그 갱신 (같은 팀이면 무시)
 		setCreatorTag(humanoid, targetPlayer)
-		humanoid:TakeDamage(tickDamage)
+		humanoid:TakeDamage(TOXIC_DOT_DAMAGE)
 		task.wait(1)
 	end
 end
 
+-- 초록색 독성 화염 이펙트 생성
 local fire = Instance.new("Fire", script.Parent)
+fire.Color = Color3.fromRGB(0, 255, 0)  -- 초록색 불꽃
+fire.SecondaryColor = Color3.fromRGB(100, 200, 50)  -- 연두색 보조 색상
+
 local smoke = Instance.new("Smoke", script.Parent)
-smoke.Color = Color3.new(0, 0, 0)
-smoke.Opacity = 0.03
-smoke.RiseVelocity = 5
-smoke.Size = 0.1
+smoke.Color = Color3.fromRGB(50, 150, 50)  -- 초록색 연기
+smoke.Opacity = 0.05
+smoke.RiseVelocity = 6
+smoke.Size = 0.15
 smoke.Parent = fire.Parent
+
 if CommonUtil:IsPartIncludedCharacter(script.Parent) then
-	fire.Size = 5
+	fire.Size = 6  -- 캐릭터에 붙은 불은 더 큼
 else
-	local originalSize = script.Parent:GetAttribute("OriginalSize");
-	fire.Size = math.abs(originalSize.X) + math.abs(originalSize.Y) + math.abs(originalSize.Z)
+	local originalSize = script.Parent:GetAttribute("OriginalSize")
+	if originalSize then
+		fire.Size = math.abs(originalSize.X) + math.abs(originalSize.Y) + math.abs(originalSize.Z)
+	else
+		fire.Size = 10
+	end
 end
 
 task.wait(0.15)
 
 task.spawn(Burning)
 
-if script.Parent.Parent.Name:match("Oil") then
-	-- 사라지는 시간을 초기화하는 처리 추가
+-- PoisonFog 모델에 붙은 경우
+if script.Parent.Parent.Name:match("Poison") then
+	-- 사라지는 시간을 초기화
 	local modelDestroyer = script.Parent.Parent:FindFirstChild("ModelDestroyer")
 	if modelDestroyer and modelDestroyer.Configuration and modelDestroyer.Configuration.WaitTime then
-		modelDestroyer.Configuration.WaitTime.Value = 10 -- 사라지는 시간을 10초로 초기화
+		modelDestroyer.Configuration.WaitTime.Value = 12 -- 독성 화염은 12초 지속
 	end
 
-	task.wait(10)
+	-- PoisonDamage 스크립트 비활성화 (독성 화염이 대신 데미지를 줌)
+	local poisonDamage = script.Parent.Parent:FindFirstChild("PoisonDamage")
+	if poisonDamage then
+		poisonDamage:SetAttribute("Disabled", true)
+	end
+
+	task.wait(12)  -- 독성 화염은 12초 지속 (일반 10초보다 길음)
 	fire:Destroy()
 	smoke:Destroy()
 
@@ -144,14 +163,14 @@ if script.Parent.Parent.Name:match("Oil") then
 
 	local Debris = game:GetService("Debris")
 
-	local oilPartCount = 0
+	local poisonPartCount = 0
 	for _, v in pairs(script.Parent.Parent:GetChildren()) do
-		if v.Name == "OilPart" then
-			oilPartCount += 1
+		if v:IsA("BasePart") then
+			poisonPartCount += 1
 		end
 	end
 
-	if oilPartCount == 1 then
+	if poisonPartCount == 1 then
 		Debris:AddItem(script.Parent.Parent, 0.2)
 	else
 		script.Parent:Destroy()
@@ -161,11 +180,9 @@ elseif CommonUtil:IsPartIncludedCharacter(script.Parent) then
 	local humanoid = CommonUtil:GetHumanoidByPart(script.Parent)
 	local targetPlayer = CommonUtil:GetPlayerByPart(script.Parent)
 	task.spawn(function()
-		local ItemDbTools = require(ServerStorage.Items.Database.ItemDb).Tool
-		local ItemInfo = ItemDbTools["FireBarrel"]
-		TakeDotDamage(humanoid, ItemInfo.DotDamage, targetPlayer)
+		TakeToxicDotDamage(humanoid, targetPlayer)
 	end)
-	task.wait(4)
+	task.wait(5)  -- 캐릭터에 붙은 독성 화염은 5초 지속
 	burningEndFlag = true
 	fire:Destroy()
 	smoke:Destroy()

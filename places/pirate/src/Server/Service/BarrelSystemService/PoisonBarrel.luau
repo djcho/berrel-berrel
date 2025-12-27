@@ -30,13 +30,68 @@ function PoisonBarrel:Throw(targetPosition)
 	BaseBarrel.Throw(self, targetPosition, self.MaxRange)
 end
 
+-- 기름 웅덩이 위에 떨어졌는지 확인
+function PoisonBarrel:CheckOilCombo(hitPosition)
+	local overlapParams = OverlapParams.new()
+	overlapParams.FilterType = Enum.RaycastFilterType.Exclude
+	overlapParams.FilterDescendantsInstances = {self.Player.Character}
+
+	local partsInRadius = workspace:GetPartBoundsInRadius(hitPosition, 10, overlapParams)
+
+	for _, part in partsInRadius do
+		if part.Parent and part.Parent.Name:match("Oil") then
+			return part.Parent  -- 기름 모델 반환
+		end
+	end
+	return nil
+end
+
+-- 기름을 독성 슬라임으로 변환
+function PoisonBarrel:ConvertOilToToxicSlime(oilModel)
+	-- 기름 모델 이름 변경 (독성 슬라임)
+	oilModel.Name = "ToxicSlime"
+
+	-- 기름 파트들을 보라색으로 변경
+	for _, part in oilModel:GetChildren() do
+		if part:IsA("BasePart") then
+			part.Color = Color3.fromRGB(128, 0, 128)  -- 보라색
+			part.Material = Enum.Material.Neon
+		end
+	end
+
+	-- 독 데미지 스크립트 추가 (강화된 버전)
+	local existingPoisonDamage = oilModel:FindFirstChild("ToxicSlimeDamage")
+	if not existingPoisonDamage then
+		local toxicSlimeDamage = ServerStorage.Scripts.PoisonDamage:Clone()
+		toxicSlimeDamage.Name = "ToxicSlimeDamage"
+		toxicSlimeDamage:SetAttribute("PoisonOwner", self.Player.Name)
+		toxicSlimeDamage:SetAttribute("DamageMultiplier", 1.5)  -- 50% 강화된 데미지
+		toxicSlimeDamage.Parent = oilModel
+	end
+
+	-- 지속시간 연장
+	local modelDestroyer = oilModel:FindFirstChild("ModelDestroyer")
+	if modelDestroyer and modelDestroyer.Configuration and modelDestroyer.Configuration.WaitTime then
+		modelDestroyer.Configuration.WaitTime.Value = 20  -- 20초 지속
+	end
+end
+
 -- 배럴이 폭발할 때 호출되는 함수
 function PoisonBarrel:Explode(hitPart, hitPosition)
 	if(BaseBarrel.Explode(self, hitPart, hitPosition) == false) then
 		return
 	end
-	
-	local poisonModel =ServerStorage.Models.PoisonFog
+
+	-- 기름 위에 떨어졌는지 확인
+	local oilModel = self:CheckOilCombo(hitPosition)
+	if oilModel then
+		-- 기름 + 가스 = 독성 슬라임!
+		self:ConvertOilToToxicSlime(oilModel)
+		self:PlayExplosionEffects(nil)  -- 이펙트만 재생
+		return
+	end
+
+	local poisonModel = ServerStorage.Models.PoisonFog
 	local modelClone = self:CloneAndPositionModel(poisonModel, hitPosition)
 	self:AttachScriptsToModel(modelClone)
 	self:PlayExplosionEffects(modelClone)
@@ -84,7 +139,7 @@ function PoisonBarrel:AttachScriptsToModel(modelClone)
 end
 
 -- 폭발 효과를 재생하는 함수
-function PoisonBarrel:PlayExplosionEffects(modelClone)
+function PoisonBarrel:PlayExplosionEffects()
 	-- 폭발 사운드를 재생
 	local remoteEvent = ReplicatedStorage:WaitForChild("PlaySoundEvent")
 	remoteEvent:FireAllClients("NormalBarrelExplode", 0, 1.5)

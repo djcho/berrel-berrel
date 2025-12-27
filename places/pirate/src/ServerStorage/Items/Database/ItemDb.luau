@@ -98,7 +98,27 @@ ItemDb.Tool = {
 		IconId = "rbxassetid://18946313398",
 		Model = ServerStorage.Tool.PoisonBarrel,
 		MaxStack = 1
-	}	
+	},
+	["WindBarrel"] = {
+		Id = 3004,
+		Category = "Tool",
+		Name = "WindBarrel",
+		DisplayName = "바람통",
+		Price = 8,
+		Damage = 5,
+		DotDamage = 0,
+		Cooldown = 1,
+		ThrowType = "ChargingThrowType",
+		MaxRange = 150,
+		ChargingSpeed = 10,
+		ExplosionRadius = 15,
+		KnockbackForce = 80,
+		MaxShots = 3,
+		ReloadTime = 2.5,
+		IconId = "rbxassetid://18946312844",
+		Model = ServerStorage.Tool.WindBarrel,
+		MaxStack = 1
+	}
 }
 
 return ItemDb

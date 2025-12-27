@@ -44,16 +44,32 @@ function FireBarrel:Explode(hitPart, hitPosition)
 	local partsInRadius = workspace:GetPartBoundsInRadius(explosionOrigin, self.ExplosionRadius, overlapParams)
 
 	for _, part in partsInRadius do
-		if part.Name ~= "Baseplate" and part.Parent and part.Parent.Name:match("Oil") then
-			local fireSpreadScript = ServerStorage.Scripts.FireSpread:Clone()
-			-- 불을 붙인 플레이어 정보 저장 (킬/어시스트 추적용)
-			fireSpreadScript:SetAttribute("FireStarter", self.Player.Name)
-			fireSpreadScript.Parent = part
+		if part.Name ~= "Baseplate" and part.Parent then
+			-- 독 웅덩이에 불을 붙이면 독성 화염 (ToxicFireSpread) 사용
+			if part.Parent.Name:match("Poison") then
+				-- 이미 불이 붙어있으면 건너뛰기
+				if not part:FindFirstChild("ToxicFireSpread") and not part:FindFirstChild("FireSpread") then
+					local toxicFireScript = ServerStorage.Scripts.ToxicFireSpread:Clone()
+					toxicFireScript:SetAttribute("FireStarter", self.Player.Name)
+					toxicFireScript.Parent = part
 
-			-- 사라지는 시간을 초기화하는 처리 추가
-			local modelDestroyer = part.Parent:FindFirstChild("ModelDestroyer")
-			if modelDestroyer and modelDestroyer.Configuration and modelDestroyer.Configuration.WaitTime then
-				modelDestroyer.Configuration.WaitTime.Value = 10 -- 사라지는 시간을 10초로 초기화
+					local modelDestroyer = part.Parent:FindFirstChild("ModelDestroyer")
+					if modelDestroyer and modelDestroyer.Configuration and modelDestroyer.Configuration.WaitTime then
+						modelDestroyer.Configuration.WaitTime.Value = 12 -- 독성 화염은 12초 지속
+					end
+				end
+			-- 기름 웅덩이는 기존 FireSpread 사용
+			elseif part.Parent.Name:match("Oil") then
+				if not part:FindFirstChild("FireSpread") then
+					local fireSpreadScript = ServerStorage.Scripts.FireSpread:Clone()
+					fireSpreadScript:SetAttribute("FireStarter", self.Player.Name)
+					fireSpreadScript.Parent = part
+
+					local modelDestroyer = part.Parent:FindFirstChild("ModelDestroyer")
+					if modelDestroyer and modelDestroyer.Configuration and modelDestroyer.Configuration.WaitTime then
+						modelDestroyer.Configuration.WaitTime.Value = 10 -- 사라지는 시간을 10초로 초기화
+					end
+				end
 			end
 		end
 	end

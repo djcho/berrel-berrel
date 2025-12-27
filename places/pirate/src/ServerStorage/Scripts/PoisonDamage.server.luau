@@ -17,8 +17,10 @@ local function isSameTeamAsPoisonOwner(targetPlayer)
 end
 
 -- 독 피해 설정
-local DOT_DAMAGE = 5  -- 틱당 피해량
+local BASE_DOT_DAMAGE = 5  -- 기본 틱당 피해량
 local DOT_INTERVAL = 1  -- 피해 간격 (초)
+local damageMultiplier = script:GetAttribute("DamageMultiplier") or 1  -- 데미지 배율 (독성 슬라임은 1.5)
+local DOT_DAMAGE = math.floor(BASE_DOT_DAMAGE * damageMultiplier)
 
 -- 영역 경계 계산
 local minBounds = Vector3.new(math.huge, math.huge, math.huge)
@@ -77,9 +79,20 @@ local function setCreatorTag(humanoid, targetPlayer)
 	game.Debris:AddItem(creator, 5)
 end
 
+-- 독성 화염이 시작되었는지 확인 (ToxicFireSpread가 붙으면 독 데미지 중지)
+local function isToxicFireActive()
+	-- Disabled 속성이 true면 독성 화염이 활성화된 것
+	return script:GetAttribute("Disabled") == true
+end
+
 -- 플레이어에게 지속 피해를 주는 함수
 local function applyPoisonDamage(player)
 	while playersInZone[player] do
+		-- 독성 화염이 시작되면 독 데미지 중지 (독성 화염이 대신 더 강한 데미지를 줌)
+		if isToxicFireActive() then
+			return
+		end
+
 		local character = player.Character
 		if character then
 			local humanoid = character:FindFirstChild("Humanoid")

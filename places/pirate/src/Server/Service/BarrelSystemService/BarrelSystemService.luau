@@ -12,6 +12,7 @@ local OilBarrel = require(script.Parent.OilBarrel)
 local FireBarrel = require(script.Parent.FireBarrel)
 local NormalBarrel = require(script.Parent.NormalBarrel)
 local PoisonBarrel = require(script.Parent.PoisonBarrel)
+local WindBarrel = require(script.Parent.WindBarrel)
 local UserData = require(game.ServerStorage.Scripts.UserData)
 local ItemDb = require(game.ServerStorage.Items.Database.ItemDb)
 
@@ -145,6 +146,8 @@ function BarrelSystemService:HandleThrowingBarrel(player, toolName, mouseHitPosi
 		barrel = FireBarrel.new(player, 1, toolInfo)
 	elseif toolName == "PoisonBarrel" then
 		barrel = PoisonBarrel.new(player, 1, toolInfo)
+	elseif toolName == "WindBarrel" then
+		barrel = WindBarrel.new(player, 1, toolInfo)
 	else
 		barrel = NormalBarrel.new(player, 1, toolInfo)
 	end
