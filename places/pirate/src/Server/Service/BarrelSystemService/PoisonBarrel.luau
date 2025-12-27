@@ -1,14 +1,9 @@
-local ReplicatedStorage = game:GetService("ReplicatedStorage")  -- 복제 스토리지
 -- 서비스 로드
+local ReplicatedStorage = game:GetService("ReplicatedStorage")  -- 복제 스토리지
 local ServerStorage = game:GetService("ServerStorage")
-local SoundService = game:GetService("SoundService")
-local TweenService = game:GetService("TweenService")
-local Terrain = workspace.Terrain
 
 -- 모듈 로드
 local BaseBarrel = require(script.Parent.BaseBarrel)
-local LoudSpeaker = require(ServerStorage.Scripts.LoudSpeaker)
-local CommonUtil = require(ServerStorage.Scripts.CommonUtil)
 
 -- PoisonBarrel 클래스 정의
 local PoisonBarrel = setmetatable({}, BaseBarrel)
@@ -27,11 +22,7 @@ end
 
 -- 배럴이 다른 객체와 충돌했을 때 호출되는 함수
 function PoisonBarrel:OnTouched(hitPart)
-	local humanoid = CommonUtil:GetHumanoidByPart(hitPart)
-	if not humanoid or humanoid.Parent.Name == self.Player.Character.Name then
-		return
-	end
-	humanoid:TakeDamage(self.HitDamage)
+	self:DealDamageToTarget(hitPart, self.HitDamage)
 end
 
 -- 배럴을 목표 위치로 던지는 함수
@@ -62,6 +53,10 @@ end
 
 -- 모델에 스크립트를 첨부하는 함수
 function PoisonBarrel:AttachScriptsToModel(modelClone)
+	-- BindableEvent 생성 (Slower와 PoisonDamage가 필요로 함)
+	local bindableEvent = Instance.new("BindableEvent")
+	bindableEvent.Name = "OnPartRemoving"
+	bindableEvent.Parent = modelClone
 
 	local modelDestroyer = ServerStorage.Scripts.ModelDestroyer:Clone()
 
@@ -77,8 +72,15 @@ function PoisonBarrel:AttachScriptsToModel(modelClone)
 
 	modelDestroyer.Parent = modelClone
 
+	-- 슬로우 효과 스크립트
 	local slower = ServerStorage.Scripts.Slower:Clone()
 	slower.Parent = modelClone
+
+	-- 독 피해 스크립트 추가 (DoT 구현)
+	local poisonDamage = ServerStorage.Scripts.PoisonDamage:Clone()
+	-- 독을 뿌린 플레이어 정보 저장 (킬/어시스트 추적용)
+	poisonDamage:SetAttribute("PoisonOwner", self.Player.Name)
+	poisonDamage.Parent = modelClone
 end
 
 -- 폭발 효과를 재생하는 함수

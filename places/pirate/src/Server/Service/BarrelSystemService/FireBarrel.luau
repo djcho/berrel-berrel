@@ -1,18 +1,13 @@
 -- 서비스 로드
-local ServerScriptService = game:GetService("ServerScriptService")  -- 서버 스크립트 서비스
 local ServerStorage = game:GetService("ServerStorage")  -- 서버 스토리지
-local SoundService = game:GetService("SoundService")  -- 사운드 서비스
 local ReplicatedStorage = game:GetService("ReplicatedStorage")  -- 복제 스토리지
 
 -- 모듈 로드
 local BaseBarrel = require(script.Parent.BaseBarrel)  -- 기본 배럴 클래스
-local LoudSpeaker = require(ServerStorage.Scripts.LoudSpeaker)  -- 라우드 스피커 클래스
-local CommonUtil = require(ServerStorage.Scripts.CommonUtil)  -- 공용 유틸리티 클래스
 
 -- FireBarrel 클래스 정의
-local FireBarrel = {}
+local FireBarrel = setmetatable({}, BaseBarrel)
 FireBarrel.__index = FireBarrel
-setmetatable(FireBarrel, BaseBarrel)
 
 -- 새로운 FireBarrel 객체 생성 함수
 function FireBarrel.new(player, level, toolInfo)
@@ -26,16 +21,9 @@ function FireBarrel.new(player, level, toolInfo)
 	return self
 end
 
------------------------공개 메서드----------------------------
-
 -- 배럴이 다른 객체와 충돌했을 때 호출되는 함수
 function FireBarrel:OnTouched(hitPart)
-	local humanoid = CommonUtil:GetHumanoidByPart(hitPart)
-	if not humanoid or humanoid.Parent.Name == self.Player.Character.Name then
-		return
-	end
-
-	humanoid:TakeDamage(self.HitDamage)
+	self:DealDamageToTarget(hitPart, self.HitDamage)
 end
 
 -- 배럴을 목표 위치로 던지는 함수
@@ -45,19 +33,21 @@ end
 
 -- 배럴이 폭발할 때 호출되는 함수
 function FireBarrel:Explode(hitPart, hitPosition)
-	if(BaseBarrel.Explode(self, hitPart, hitPosition) == false) then
+	if BaseBarrel.Explode(self, hitPart, hitPosition) == false then
 		return
 	end
 
 	local explosionOrigin = self.BarrelPart.Position
-	local partsInRadius = workspace:FindPartsInRegion3(Region3.new(
-		explosionOrigin - Vector3.new(self.ExplosionRadius, self.ExplosionRadius, self.ExplosionRadius),
-		explosionOrigin + Vector3.new(self.ExplosionRadius, self.ExplosionRadius, self.ExplosionRadius)
-		))
+	local overlapParams = OverlapParams.new()
+	overlapParams.FilterType = Enum.RaycastFilterType.Exclude
+	overlapParams.FilterDescendantsInstances = {self.Player.Character}
+	local partsInRadius = workspace:GetPartBoundsInRadius(explosionOrigin, self.ExplosionRadius, overlapParams)
 
-	for _, part in pairs(partsInRadius) do
+	for _, part in partsInRadius do
 		if part.Name ~= "Baseplate" and part.Parent and part.Parent.Name:match("Oil") then
 			local fireSpreadScript = ServerStorage.Scripts.FireSpread:Clone()
+			-- 불을 붙인 플레이어 정보 저장 (킬/어시스트 추적용)
+			fireSpreadScript:SetAttribute("FireStarter", self.Player.Name)
 			fireSpreadScript.Parent = part
 
 			-- 사라지는 시간을 초기화하는 처리 추가

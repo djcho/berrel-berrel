@@ -102,6 +102,26 @@ function TeamService:GetTeamCounts()
 	}
 end
 
+-- 두 플레이어가 같은 팀인지 확인
+function TeamService:IsSameTeam(player1, player2)
+	if not player1 or not player2 then
+		return false
+	end
+	return player1.Team and player2.Team and player1.Team == player2.Team
+end
+
+-- 플레이어와 캐릭터가 같은 팀인지 확인 (캐릭터로부터 플레이어를 찾아서 비교)
+function TeamService:IsSameTeamByCharacter(player, character)
+	if not player or not character then
+		return false
+	end
+	local targetPlayer = Players:GetPlayerFromCharacter(character)
+	if not targetPlayer then
+		return false
+	end
+	return self:IsSameTeam(player, targetPlayer)
+end
+
 -- 캐릭터가 추가되었을 때 호출되는 함수
 function TeamService:OnCharacterAdded(player, character)
 	local tA, tB = getTeams()

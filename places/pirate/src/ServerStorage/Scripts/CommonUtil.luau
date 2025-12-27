@@ -39,15 +39,44 @@ function CommonUtil:GetHumanoidByPart(part)
 end
 
 function CommonUtil:IsPartIncludedCharacter(part)
-	if not part  then
+	if not part then
 		return false
 	end
 	local Self = require(script)
 	if not Self:GetHumanoidByPart(part) then
 		return false
 	end
-	
+
 	return true
+end
+
+-- 파트에서 캐릭터를 찾고 해당 플레이어를 반환
+function CommonUtil:GetPlayerByPart(part)
+	if not part then
+		return nil
+	end
+
+	local character = nil
+	if part.Parent and part.Parent:FindFirstChild("Humanoid") then
+		character = part.Parent
+	elseif part.Parent and part.Parent.Parent and part.Parent.Parent:FindFirstChild("Humanoid") then
+		character = part.Parent.Parent
+	end
+
+	if not character then
+		return nil
+	end
+
+	local Players = game:GetService("Players")
+	return Players:GetPlayerFromCharacter(character)
+end
+
+-- 두 플레이어가 같은 팀인지 확인
+function CommonUtil:IsSameTeam(player1, player2)
+	if not player1 or not player2 then
+		return false
+	end
+	return player1.Team and player2.Team and player1.Team == player2.Team
 end
 
 return CommonUtil

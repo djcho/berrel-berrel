@@ -1,14 +1,10 @@
-local ReplicatedStorage = game:GetService("ReplicatedStorage")  -- 복제 스토리지
 -- 서비스 로드
+local ReplicatedStorage = game:GetService("ReplicatedStorage")  -- 복제 스토리지
 local ServerStorage = game:GetService("ServerStorage")
-local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
-local Terrain = workspace.Terrain
 
 -- 모듈 로드
 local BaseBarrel = require(script.Parent.BaseBarrel)
-local LoudSpeaker = require(ServerStorage.Scripts.LoudSpeaker)
-local CommonUtil = require(ServerStorage.Scripts.CommonUtil)
 
 -- OilBarrel 클래스 정의
 local OilBarrel = setmetatable({}, BaseBarrel)
@@ -27,11 +23,7 @@ end
 
 -- 배럴이 다른 객체와 충돌했을 때 호출되는 함수
 function OilBarrel:OnTouched(hitPart)
-	local humanoid = CommonUtil:GetHumanoidByPart(hitPart)
-	if not humanoid or humanoid.Parent.Name == self.Player.Character.Name then
-		return
-	end
-	humanoid:TakeDamage(self.HitDamage)
+	self:DealDamageToTarget(hitPart, self.HitDamage)
 end
 
 -- 배럴을 목표 위치로 던지는 함수
@@ -44,7 +36,7 @@ function OilBarrel:Explode(hitPart, hitPosition)
 	if(BaseBarrel.Explode(self, hitPart, hitPosition) == false) then
 		return
 	end
-	
+
 	local oilModel = self:ChooseRandomOilModel()
 	local modelClone = self:CloneAndPositionModel(oilModel, hitPosition)
 	self:AttachScriptsToModel(modelClone)

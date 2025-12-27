@@ -74,7 +74,7 @@ function MatchController:Initialize()
 end
 
 function MatchController:createRemoteEvents()
-	local events = {"MatchUpdate", "KillFeed", "GameEnd", "GameStateUpdate"}
+	local events = {"MatchUpdate", "KillFeed", "GameEnd", "GameStateUpdate", "GameStart"}
 	for _, eventName in ipairs(events) do
 		if not ReplicatedStorage:FindFirstChild(eventName) then
 			local event = Instance.new("RemoteEvent")
@@ -354,6 +354,10 @@ function MatchController:startMatch()
 		state = "started",
 		matchTime = CONFIG.MATCH_TIME
 	})
+
+	-- 게임 시작 알림 이벤트 발생
+	ReplicatedStorage.GameStart:FireAllClients()
+
 	self:broadcastGameState()
 
 	print("[MatchController] 매치 시작!")

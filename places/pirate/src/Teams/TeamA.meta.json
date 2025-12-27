@@ -1,6 +1,6 @@
 {
-  "$className": "Team",
-  "$properties": {
+  "className": "Team",
+  "properties": {
     "TeamColor": "Bright red",
     "AutoAssignable": false
   }

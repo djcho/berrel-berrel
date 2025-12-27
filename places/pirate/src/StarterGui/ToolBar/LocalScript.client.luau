@@ -161,10 +161,10 @@ local function LoadBackPack()
 		toolArray[i].ToolItem.ToolName.Value = toolName
 		local toolStatus = initialBarrelStatus[toolName] or {ToolName = toolName, MaxShots = 0, ShotLeft = 0, Reloading = {}, ReloadTime = 0}
 		toolArray[i].ToolItem.Stack.Text = tostring(toolStatus.ShotLeft)
-		for j, isReloading in pairs(toolStatus.Reloading) do
+		for _, isReloading in pairs(toolStatus.Reloading) do
 			if isReloading then
 				coroutine.wrap(function()
-					startCooldown(toolArray[i].ToolItem.Icon, toolStatus.ReloadTime, j)
+					startCooldown(toolName, toolArray[i].ToolItem.Icon, toolStatus.ReloadTime)
 				end)()
 			end
 		end

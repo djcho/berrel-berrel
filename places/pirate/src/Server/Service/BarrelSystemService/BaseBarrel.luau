@@ -1,22 +1,19 @@
 -- 상수 설정
-local MAX_DISTANCE = 200  -- 최대 거리 설정
 local TIME_DIVISOR = 100
 local GRAVITY_SCALE = 0.5
 
 local RAYCAST_OFFSET = 4000  -- 레이캐스트 오프셋 설정
-local DEFAULT_HIT_DAMAGE = 10  -- 기본 피해량 설정
 local MAX_BARREL_LEVEL = 4  -- 최대 배럴 레벨 설정
 local DEFAULT_LEVEL = 1  -- 기본 레벨 설정
 
 -- 서비스 로드
-local PhysicsService = game:GetService("PhysicsService")  -- 물리 서비스
 local ServerStorage = game:GetService("ServerStorage")  -- 서버 스토리지
 local ReplicatedStorage = game:GetService("ReplicatedStorage")  -- 리플리케이티드 스토리지
 local throwingBarrelEvent = ReplicatedStorage:WaitForChild("ThrowingBarrelEvent")  -- 배럴 던지기 이벤트
 local RunService = game:GetService('RunService')  -- 런 서비스
-local Debris = game:GetService("Debris")  -- 잔해 서비스
 local SoundService = game:GetService("SoundService")
 local LoudSpeaker = require(ServerStorage.Scripts.LoudSpeaker)
+local CommonUtil = require(ServerStorage.Scripts.CommonUtil)
 
 -- BaseBarrel 클래스 정의
 local BaseBarrel = {}
@@ -100,11 +97,21 @@ function BaseBarrel:Throw(targetPosition, maxRange)
 
 	local startTime = tick()
 
-	-- 서버에서 투사체 위치 업데이트
-	RunService.Heartbeat:Connect(function()
+	-- 서버에서 투사체 위치 업데이트 (메모리 누수 수정)
+	local heartbeatConnection
+	heartbeatConnection = RunService.Heartbeat:Connect(function()
+		-- 배럴이 이미 파괴되었는지 확인
+		if not self.BarrelPart or not self.BarrelPart.Parent then
+			heartbeatConnection:Disconnect()
+			return
+		end
+
 		local nt = tick() - startTime
 		if nt > t * 2 then
-			self.BarrelPart:Destroy()
+			heartbeatConnection:Disconnect()
+			if self.BarrelPart and self.BarrelPart.Parent then
+				self.BarrelPart:Destroy()
+			end
 			return
 		end
 		self.BarrelPart.Position = 0.5 * g * nt * nt + v0 * nt + x0
@@ -124,24 +131,63 @@ end
 
 -- 배럴 레벨을 업그레이드하는 함수
 function BaseBarrel:UpgradeLevel()
-	if self.Level == MAX_BARREL_LEVEL  then
+	if self.Level == MAX_BARREL_LEVEL then
 		return
 	end
 
-	local CommonUtil = require(ServerStorage.Scripts.CommonUtil)
-	local commonUtil = CommonUtil.new()
-
 	self.Level += 1
-	local barrelScale = 1
-	barrelScale += 0.5
-	commonUtil:ScaleModel(self.BarrelPart, barrelScale)
+	local barrelScale = 1.5
+	CommonUtil:ScaleModel(self.BarrelPart, barrelScale)
+end
+
+-- 충돌한 파트의 플레이어에게 피해를 주는 공통 함수 (팀킬 방지 포함)
+function BaseBarrel:DealDamageToTarget(hitPart, damage)
+	local humanoid = CommonUtil:GetHumanoidByPart(hitPart)
+	if not humanoid then
+		return false
+	end
+
+	-- 자기 자신 체크
+	if humanoid.Parent.Name == self.Player.Character.Name then
+		return false
+	end
+
+	-- 팀킬 방지
+	local targetPlayer = CommonUtil:GetPlayerByPart(hitPart)
+	if CommonUtil:IsSameTeam(self.Player, targetPlayer) then
+		return false
+	end
+
+	-- creator 태그 설정 (킬/어시스트 추적용)
+	self:SetCreatorTag(humanoid)
+
+	humanoid:TakeDamage(damage)
+	return true
+end
+
+-- creator 태그 설정 함수 (킬/어시스트 시스템용)
+function BaseBarrel:SetCreatorTag(humanoid)
+	-- 기존 creator 태그 제거
+	local existingCreator = humanoid:FindFirstChild("creator")
+	if existingCreator then
+		existingCreator:Destroy()
+	end
+
+	-- 새 creator 태그 생성
+	local creator = Instance.new("ObjectValue")
+	creator.Name = "creator"
+	creator.Value = self.Player
+	creator.Parent = humanoid
+
+	-- 5초 후 자동 제거 (어시스트 시간 제한)
+	game.Debris:AddItem(creator, 5)
 end
 
 -- 레이캐스트를 사용하여 주어진 위치에서 Y 축을 따라 위치를 계산하는 함수
 function BaseBarrel:GetPositionFromSubjectUsingYRaycast(subjectPosition)
 	-- 배럴 파트를 제외할 객체들을 모은 테이블 생성
-	local oilTable = {}
-	table.insert(oilTable, self.BarrelPart)
+	local excludeList = {}
+	table.insert(excludeList, self.BarrelPart)
 
 	-- ServerStorage/Effect 내부의 모든 객체 이름을 가져옴
 	local effectNames = {}
@@ -154,20 +200,27 @@ function BaseBarrel:GetPositionFromSubjectUsingYRaycast(subjectPosition)
 		end
 	end
 
-	-- 워크스페이스에서 Oil, SlowPart 및 ServerStorage/Effect에서 가져온 이름들 포함
+	-- 워크스페이스에서 Oil 모델 전체, PoisonFog 모델 전체를 제외 목록에 추가
+	for _, child in workspace:GetChildren() do
+		if child:IsA("Model") and (child.Name:match("Oil") or child.Name:match("Poison")) then
+			table.insert(excludeList, child)  -- 모델 전체를 추가하면 하위 파트도 제외됨
+		end
+	end
+
+	-- 워크스페이스에서 SlowPart 및 이펙트 파트들 제외
 	for _, v in pairs(workspace:GetDescendants()) do
-		if v:IsA("BasePart") and (v.Name:match("Oil") or v.Name:match("SlowPart") or table.find(effectNames, v.Name)) then
-			table.insert(oilTable, v)
+		if v:IsA("BasePart") and (v.Name:match("SlowPart") or table.find(effectNames, v.Name)) then
+			table.insert(excludeList, v)
 		end
 	end
 
 	-- 레이캐스트 매개변수 설정
 	local raycastParams = RaycastParams.new()
-	raycastParams.FilterDescendantsInstances = oilTable
-	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+	raycastParams.FilterDescendantsInstances = excludeList
+	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
 
 	-- 레이캐스트 시작 위치 설정 (Y축으로 오프셋 적용)
-	local raycastPosition = Vector3.new(subjectPosition.X, subjectPosition.Y + RAYCAST_OFFSET, subjectPosition.Z)	
+	local raycastPosition = Vector3.new(subjectPosition.X, subjectPosition.Y + RAYCAST_OFFSET, subjectPosition.Z)
 	-- 레이캐스트 수행 (아래로 5000 스터드 거리)
 	local raycastDirection = Vector3.new(0, -5000, 0)
 	local raycastResult = workspace:Raycast(raycastPosition, raycastDirection, raycastParams)
@@ -218,13 +271,13 @@ end
 
 
 -- 물 위에 떠 있도록 하는 함수
-function BaseBarrel:FloatOnWater(position)
+function BaseBarrel:FloatOnWater(_position)
 	local loudSpeaker = LoudSpeaker.new()
 	loudSpeaker:PlayLoudly(SoundService.SplashWater)
-	
+
 	local barrelClone = self.BarrelPart:Clone()
 	barrelClone.CanCollide = true
-	wait(0)
+	task.wait()
 	barrelClone.Parent = workspace
 	
 	local modelDestroyer = ServerStorage.Scripts.ModelDestroyer:Clone()

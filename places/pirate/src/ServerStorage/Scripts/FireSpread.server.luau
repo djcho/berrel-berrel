@@ -1,55 +1,90 @@
-if(script.Parent.Name == "Part") then
+if script.Parent.Name == "Part" then
 	return
 end
 
 local ServerStorage = game:GetService("ServerStorage")
+local Players = game:GetService("Players")
 local CommonUtil = require(ServerStorage.Scripts.CommonUtil)
 
-local burningEndFlag = false
-local function Burning()
-	while not burningEndFlag do			
-		local DummyPart = Instance.new("Part", workspace)		
-		DummyPart.Size = Vector3.new(20, 20, 20)
-		DummyPart.Transparency = 1
-		DummyPart.Shape = Enum.PartType.Ball
-		DummyPart.Position = script.Parent.Position
+-- 불을 붙인 플레이어 정보 가져오기
+local fireStarterName = script:GetAttribute("FireStarter")
+local fireStarter = fireStarterName and Players:FindFirstChild(fireStarterName)
 
-		for _, SpreadPart in pairs(DummyPart:GetTouchingParts()) do
+local SPREAD_RADIUS = 10  -- 불 확산 반경
+local SPREAD_INTERVAL = 0.5  -- 확산 체크 간격 (성능 개선)
+
+local burningEndFlag = false
+
+-- 불 확산 대상에 스크립트를 추가하는 헬퍼 함수
+local function attachFireToTarget(targetPart)
+	local newScript = script:Clone()
+	newScript.Parent = targetPart
+	newScript.Disabled = false
+
+	-- 사라지는 시간을 초기화하는 처리 추가
+	local modelDestroyer = targetPart.Parent:FindFirstChild("ModelDestroyer")
+	if modelDestroyer and modelDestroyer.Configuration and modelDestroyer.Configuration.WaitTime then
+		modelDestroyer.Configuration.WaitTime.Value = 10 -- 사라지는 시간을 10초로 초기화
+	end
+end
+
+local function Burning()
+	while not burningEndFlag do
+		-- GetPartBoundsInRadius 사용 (Part 생성 없이 성능 개선)
+		local overlapParams = OverlapParams.new()
+		overlapParams.FilterType = Enum.RaycastFilterType.Exclude
+		overlapParams.FilterDescendantsInstances = {script.Parent}
+
+		local partsInRadius = workspace:GetPartBoundsInRadius(script.Parent.Position, SPREAD_RADIUS, overlapParams)
+
+		for _, SpreadPart in partsInRadius do
 			if CommonUtil:IsPartIncludedCharacter(SpreadPart) then
 				if not SpreadPart.Parent:FindFirstChild("FireSpread", true) then
-					local newScript = script:Clone()
-					newScript.Parent = SpreadPart
-					newScript.Disabled = false
-
-					-- 사라지는 시간을 초기화하는 처리 추가
-					local modelDestroyer = SpreadPart.Parent:FindFirstChild("ModelDestroyer")
-					if modelDestroyer and modelDestroyer.Configuration and modelDestroyer.Configuration.WaitTime then
-						modelDestroyer.Configuration.WaitTime.Value = 10 -- 사라지는 시간을 10초로 초기화
-					end
+					attachFireToTarget(SpreadPart)
 				end
-			end
-			if SpreadPart:FindFirstChild("burnable") then				
+			elseif SpreadPart:FindFirstChild("burnable") then
 				if not SpreadPart:FindFirstChild("FireSpread") then
-					
-					local newScript = script:Clone()
-					newScript.Parent = SpreadPart
-					newScript.Disabled = false
-
-					-- 사라지는 시간을 초기화하는 처리 추가
-					local modelDestroyer = SpreadPart.Parent:FindFirstChild("ModelDestroyer")
-					if modelDestroyer and modelDestroyer.Configuration and modelDestroyer.Configuration.WaitTime then
-						modelDestroyer.Configuration.WaitTime.Value = 10 -- 사라지는 시간을 10초로 초기화
-					end
+					attachFireToTarget(SpreadPart)
 				end
 			end
 		end
 
-		DummyPart:Destroy()
-		wait()
+		task.wait(SPREAD_INTERVAL)
 	end
 end
 
-local function TakeDotDamage(humanoid, tickDamage)
+-- 같은 팀인지 확인
+local function isSameTeamAsFireStarter(targetPlayer)
+	if not fireStarter or not targetPlayer then
+		return false
+	end
+	return fireStarter.Team and targetPlayer.Team and fireStarter.Team == targetPlayer.Team
+end
+
+-- creator 태그 설정 함수 (킬/어시스트 시스템용)
+local function setCreatorTag(humanoid, targetPlayer)
+	if not fireStarter then return end
+
+	-- 같은 팀이면 creator 태그 설정 안함 (팀킬 방지)
+	if isSameTeamAsFireStarter(targetPlayer) then return end
+
+	-- 기존 creator 태그 제거
+	local existingCreator = humanoid:FindFirstChild("creator")
+	if existingCreator then
+		existingCreator:Destroy()
+	end
+
+	-- 새 creator 태그 생성
+	local creator = Instance.new("ObjectValue")
+	creator.Name = "creator"
+	creator.Value = fireStarter
+	creator.Parent = humanoid
+
+	-- 5초 후 자동 제거
+	game.Debris:AddItem(creator, 5)
+end
+
+local function TakeDotDamage(humanoid, tickDamage, targetPlayer)
 	if not humanoid then
 		return
 	end
@@ -58,9 +93,11 @@ local function TakeDotDamage(humanoid, tickDamage)
 		tickDamage = 3
 	end
 
-	for i = 1, 4 do
+	for _ = 1, 3 do
+		-- 매 데미지마다 creator 태그 갱신 (같은 팀이면 무시)
+		setCreatorTag(humanoid, targetPlayer)
 		humanoid:TakeDamage(tickDamage)
-		wait(1)
+		task.wait(1)
 	end
 end
 
@@ -78,9 +115,9 @@ else
 	fire.Size = math.abs(originalSize.X) + math.abs(originalSize.Y) + math.abs(originalSize.Z)
 end
 
-wait(0.15)
+task.wait(0.15)
 
-spawn(Burning)
+task.spawn(Burning)
 
 if script.Parent.Parent.Name:match("Oil") then
 	-- 사라지는 시간을 초기화하는 처리 추가
@@ -89,7 +126,7 @@ if script.Parent.Parent.Name:match("Oil") then
 		modelDestroyer.Configuration.WaitTime.Value = 10 -- 사라지는 시간을 10초로 초기화
 	end
 
-	wait(10)
+	task.wait(10)
 	fire:Destroy()
 	smoke:Destroy()
 
@@ -111,16 +148,15 @@ if script.Parent.Parent.Name:match("Oil") then
 		script.Parent:Destroy()
 	end
 	burningEndFlag = true
-elseif CommonUtil:IsPartIncludedCharacter(script) then
-	local humanoid = CommonUtil:GetHumanoidByPart(script)
-	spawn(function()
+elseif CommonUtil:IsPartIncludedCharacter(script.Parent) then
+	local humanoid = CommonUtil:GetHumanoidByPart(script.Parent)
+	local targetPlayer = CommonUtil:GetPlayerByPart(script.Parent)
+	task.spawn(function()
 		local ItemDbTools = require(ServerStorage.Items.Database.ItemDb).Tool
 		local ItemInfo = ItemDbTools["FireBarrel"]
-		
-		
-		TakeDotDamage(humanoid, ItemInfo.DotDamage)
+		TakeDotDamage(humanoid, ItemInfo.DotDamage, targetPlayer)
 	end)
-	wait(4)
+	task.wait(4)
 	burningEndFlag = true
 	fire:Destroy()
 	smoke:Destroy()
