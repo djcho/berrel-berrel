@@ -1,7 +1,8 @@
 -- ToxicFireSpread: 독 웅덩이에 불이 붙었을 때 초록색 독성 화염 생성
 -- 일반 화염보다 강한 데미지를 줌
 
-if script.Parent.Name == "Part" then
+-- ServerStorage에 있을 때는 실행하지 않음 (Clone되어 workspace로 갈 때만 실행)
+if script.Parent:IsDescendantOf(game:GetService("ServerStorage")) then
 	return
 end
 

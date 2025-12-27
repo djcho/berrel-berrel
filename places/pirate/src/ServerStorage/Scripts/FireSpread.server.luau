@@ -1,4 +1,5 @@
-if script.Parent.Name == "Part" then
+-- ServerStorage에 있을 때는 실행하지 않음 (Clone되어 workspace로 갈 때만 실행)
+if script.Parent:IsDescendantOf(game:GetService("ServerStorage")) then
 	return
 end
 

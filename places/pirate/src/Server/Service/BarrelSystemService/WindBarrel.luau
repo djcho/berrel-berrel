@@ -17,7 +17,9 @@ local WIND_SPREAD_RADIUS = 20  -- 가스/기름 확산 범위
 
 -- 새로운 WindBarrel 객체 생성 함수
 function WindBarrel.new(player, level, toolInfo)
-	local self = BaseBarrel.new(player, ServerStorage.Parts.WindBarrel, level)
+	-- TODO: Studio에서 WindBarrel 파트 생성 후 변경
+	local windBarrelPart = ServerStorage.Parts:FindFirstChild("WindBarrel") or ServerStorage.Parts.NormalBarrel
+	local self = BaseBarrel.new(player, windBarrelPart, level)
 	setmetatable(self, WindBarrel)
 	self.HitDamage = toolInfo.Damage
 	self.MaxRange = toolInfo.MaxRange
@@ -113,6 +115,23 @@ function WindBarrel:SpreadPoolsWithWind(explosionOrigin)
 	end
 end
 
+-- 바닥 높이를 찾는 함수
+function WindBarrel:FindGroundHeight(position, model)
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+	raycastParams.FilterDescendantsInstances = {model}
+
+	-- 위에서 아래로 레이캐스트
+	local rayOrigin = Vector3.new(position.X, position.Y + 50, position.Z)
+	local rayDirection = Vector3.new(0, -100, 0)
+
+	local result = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
+	if result then
+		return result.Position.Y
+	end
+	return position.Y  -- 바닥을 못 찾으면 현재 높이 유지
+end
+
 -- 모델을 바람 방향으로 밀어내는 함수
 function WindBarrel:PushModel(model, explosionOrigin, distance)
 	local primaryPart = model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
@@ -124,16 +143,101 @@ function WindBarrel:PushModel(model, explosionOrigin, distance)
 
 	local targetPosition = primaryPart.Position + direction * distance
 
+	-- 목표 위치의 바닥 높이 찾기
+	local groundY = self:FindGroundHeight(targetPosition, model)
+
+	-- 파트들의 최저 높이 계산 (바닥에 붙이기 위해)
+	local lowestY = math.huge
+	for _, part in model:GetChildren() do
+		if part:IsA("BasePart") then
+			local bottomY = part.Position.Y - part.Size.Y / 2
+			if bottomY < lowestY then
+				lowestY = bottomY
+			end
+		end
+	end
+
+	-- 바닥에 맞춰 높이 조정
+	local heightAdjustment = groundY - lowestY + 0.1  -- 0.1은 바닥 위에 살짝 띄움
+	targetPosition = Vector3.new(targetPosition.X, primaryPart.Position.Y + heightAdjustment, targetPosition.Z)
+
 	-- 부드럽게 이동
 	local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
+	local lastTween = nil
 	for _, part in model:GetChildren() do
 		if part:IsA("BasePart") then
 			local offset = part.Position - primaryPart.Position
 			local targetPos = targetPosition + offset
 			local tween = TweenService:Create(part, tweenInfo, {Position = targetPos})
 			tween:Play()
+			lastTween = tween
 		end
+	end
+
+	-- Tween 완료 후 Slower/PoisonDamage 스크립트 재시작 (영역 재계산)
+	if lastTween then
+		lastTween.Completed:Connect(function()
+			self:RefreshZoneScripts(model)
+		end)
+	end
+end
+
+-- Slower, PoisonDamage 스크립트를 재시작하여 영역 재계산
+function WindBarrel:RefreshZoneScripts(model)
+	-- 기존 스크립트들의 cleanup을 위해 BindableEvent 호출
+	local bindableEvent = model:FindFirstChild("OnPartRemoving")
+	if bindableEvent then
+		bindableEvent:Fire()  -- cleanup 트리거 (속도 복구 등)
+	end
+
+	-- 잠시 대기 후 새 스크립트 생성 (cleanup 완료 대기)
+	task.wait(0.1)
+
+	-- 새 BindableEvent 생성 (기존 것은 cleanup에서 사용됨)
+	local newBindableEvent = Instance.new("BindableEvent")
+	newBindableEvent.Name = "OnPartRemoving"
+	newBindableEvent.Parent = model
+
+	-- Slower 스크립트 재시작
+	local slower = model:FindFirstChild("Slower")
+	if slower then
+		slower:Destroy()
+		local newSlower = ServerStorage.Scripts.Slower:Clone()
+		newSlower.Parent = model
+	end
+
+	-- PoisonDamage 스크립트 재시작
+	local poisonDamage = model:FindFirstChild("PoisonDamage")
+	if poisonDamage then
+		local ownerName = poisonDamage:GetAttribute("PoisonOwner")
+		local damageMultiplier = poisonDamage:GetAttribute("DamageMultiplier")
+		poisonDamage:Destroy()
+		local newPoisonDamage = ServerStorage.Scripts.PoisonDamage:Clone()
+		if ownerName then
+			newPoisonDamage:SetAttribute("PoisonOwner", ownerName)
+		end
+		if damageMultiplier then
+			newPoisonDamage:SetAttribute("DamageMultiplier", damageMultiplier)
+		end
+		newPoisonDamage.Parent = model
+	end
+
+	-- ToxicSlimeDamage 스크립트도 재시작
+	local toxicDamage = model:FindFirstChild("ToxicSlimeDamage")
+	if toxicDamage then
+		local ownerName = toxicDamage:GetAttribute("PoisonOwner")
+		local damageMultiplier = toxicDamage:GetAttribute("DamageMultiplier")
+		toxicDamage:Destroy()
+		local newToxicDamage = ServerStorage.Scripts.PoisonDamage:Clone()
+		newToxicDamage.Name = "ToxicSlimeDamage"
+		if ownerName then
+			newToxicDamage:SetAttribute("PoisonOwner", ownerName)
+		end
+		if damageMultiplier then
+			newToxicDamage:SetAttribute("DamageMultiplier", damageMultiplier)
+		end
+		newToxicDamage.Parent = model
 	end
 end
 

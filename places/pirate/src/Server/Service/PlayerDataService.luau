@@ -14,6 +14,7 @@ local FireBarrelItem = require(ItemStorage.FireBarrelItem)
 local OilBarrelItem = require(ItemStorage.OilBarrelItem)
 local NormalBarrelItem = require(ItemStorage.NormalBarrelItem)
 local PoisonBarrelItem = require(ItemStorage.PoisonBarrelItem)
+local WindBarrelItem = require(ItemStorage.WindBarrelItem)
 local ItemDb = require(ItemStorage.Database.ItemDb)
 local UserData = require(ServerStorage.Scripts.UserData)
 
@@ -96,10 +97,11 @@ function PlayerDataService:OnCharacterAdded(character)
 	boolValue.Value = true
 
 	InventoryService:ClearInventory(player)
-	InventoryService:AddItem(player, NormalBarrelItem.new())    
+	InventoryService:AddItem(player, NormalBarrelItem.new())
 	InventoryService:AddItem(player, OilBarrelItem.new())
 	InventoryService:AddItem(player, FireBarrelItem.new())
-	InventoryService:AddItem(player, PoisonBarrelItem.new())   
+	InventoryService:AddItem(player, PoisonBarrelItem.new())
+	InventoryService:AddItem(player, WindBarrelItem.new())
 
 	-- 배럴 상태 초기화
 	self:InitializeBarrelStatus(player)

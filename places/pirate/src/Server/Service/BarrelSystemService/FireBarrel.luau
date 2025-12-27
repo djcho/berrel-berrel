@@ -43,39 +43,50 @@ function FireBarrel:Explode(hitPart, hitPosition)
 	overlapParams.FilterDescendantsInstances = {self.Player.Character}
 	local partsInRadius = workspace:GetPartBoundsInRadius(explosionOrigin, self.ExplosionRadius, overlapParams)
 
+	-- 이미 처리한 모델 추적 (중복 처리 방지)
+	local processedModels = {}
+
 	for _, part in partsInRadius do
-		if part.Name ~= "Baseplate" and part.Parent then
+		if part.Name ~= "Baseplate" and part.Parent and not processedModels[part.Parent] then
 			-- 독 웅덩이에 불을 붙이면 독성 화염 (ToxicFireSpread) 사용
 			if part.Parent.Name:match("Poison") then
-				-- 이미 불이 붙어있으면 건너뛰기
-				if not part:FindFirstChild("ToxicFireSpread") and not part:FindFirstChild("FireSpread") then
-					local toxicFireScript = ServerStorage.Scripts.ToxicFireSpread:Clone()
-					toxicFireScript:SetAttribute("FireStarter", self.Player.Name)
-					toxicFireScript.Parent = part
-
-					local modelDestroyer = part.Parent:FindFirstChild("ModelDestroyer")
-					if modelDestroyer and modelDestroyer.Configuration and modelDestroyer.Configuration.WaitTime then
-						modelDestroyer.Configuration.WaitTime.Value = 12 -- 독성 화염은 12초 지속
+				processedModels[part.Parent] = true
+				-- 모델 내 모든 파트에 불 붙이기
+				for _, poisonPart in part.Parent:GetChildren() do
+					if poisonPart:IsA("BasePart") and not poisonPart:FindFirstChild("ToxicFireSpread") and not poisonPart:FindFirstChild("FireSpread") then
+						local toxicFireScript = ServerStorage.Scripts.ToxicFireSpread:Clone()
+						toxicFireScript:SetAttribute("FireStarter", self.Player.Name)
+						toxicFireScript.Parent = poisonPart
 					end
+				end
+
+				local modelDestroyer = part.Parent:FindFirstChild("ModelDestroyer")
+				if modelDestroyer and modelDestroyer.Configuration and modelDestroyer.Configuration.WaitTime then
+					modelDestroyer.Configuration.WaitTime.Value = 12 -- 독성 화염은 12초 지속
 				end
 			-- 기름 웅덩이는 기존 FireSpread 사용
 			elseif part.Parent.Name:match("Oil") then
-				if not part:FindFirstChild("FireSpread") and not part:FindFirstChild("ToxicFireSpread") then
-					-- ToxicOil (기름+가스 콤보)이면 ToxicFireSpread 사용
-					local isToxicOil = part.Parent.Name:match("Toxic")
-					local fireScript
-					if isToxicOil then
-						fireScript = ServerStorage.Scripts.ToxicFireSpread:Clone()
-					else
-						fireScript = ServerStorage.Scripts.FireSpread:Clone()
-					end
-					fireScript:SetAttribute("FireStarter", self.Player.Name)
-					fireScript.Parent = part
+				processedModels[part.Parent] = true
+				-- ToxicOil (기름+가스 콤보)이면 ToxicFireSpread 사용
+				local isToxicOil = part.Parent.Name:match("Toxic")
 
-					local modelDestroyer = part.Parent:FindFirstChild("ModelDestroyer")
-					if modelDestroyer and modelDestroyer.Configuration and modelDestroyer.Configuration.WaitTime then
-						modelDestroyer.Configuration.WaitTime.Value = isToxicOil and 12 or 10
+				-- 모델 내 모든 파트에 불 붙이기
+				for _, oilPart in part.Parent:GetChildren() do
+					if oilPart:IsA("BasePart") and not oilPart:FindFirstChild("FireSpread") and not oilPart:FindFirstChild("ToxicFireSpread") then
+						local fireScript
+						if isToxicOil then
+							fireScript = ServerStorage.Scripts.ToxicFireSpread:Clone()
+						else
+							fireScript = ServerStorage.Scripts.FireSpread:Clone()
+						end
+						fireScript:SetAttribute("FireStarter", self.Player.Name)
+						fireScript.Parent = oilPart
 					end
+				end
+
+				local modelDestroyer = part.Parent:FindFirstChild("ModelDestroyer")
+				if modelDestroyer and modelDestroyer.Configuration and modelDestroyer.Configuration.WaitTime then
+					modelDestroyer.Configuration.WaitTime.Value = isToxicOil and 12 or 10
 				end
 			end
 		end
