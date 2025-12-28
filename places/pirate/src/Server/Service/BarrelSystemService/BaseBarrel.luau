@@ -173,6 +173,8 @@ function BaseBarrel:Throw(targetPosition)
 
 	-- 서버에서 투사체 위치 업데이트 (판정용, 시각적 렌더링은 클라이언트)
 	local heartbeatConnection
+	local tornadoInfluence = Vector3.new(0, 0, 0)  -- 토네이도 영향 누적
+
 	heartbeatConnection = RunService.Heartbeat:Connect(function()
 		-- 배럴이 이미 파괴되었는지 확인
 		if not self.BarrelPart or not self.BarrelPart.Parent then
@@ -188,7 +190,30 @@ function BaseBarrel:Throw(targetPosition)
 			end
 			return
 		end
-		self.BarrelPart.Position = 0.5 * g * nt * nt + v0 * nt + x0
+
+		-- 기본 포물선 위치
+		local basePosition = 0.5 * g * nt * nt + v0 * nt + x0
+
+		-- 토네이도 영향 체크
+		for _, child in workspace:GetChildren() do
+			if child.Name == "Tornado" and child:IsA("BasePart") then
+				local toTornado = child.Position - basePosition
+				local distToTornado = toTornado.Magnitude
+				local tornadoRadius = 20  -- 토네이도 영향 범위
+
+				if distToTornado < tornadoRadius then
+					-- 토네이도에 가까울수록 강하게 끌림
+					local pullStrength = (tornadoRadius - distToTornado) / tornadoRadius
+					local tangent = Vector3.new(-toTornado.Z, 0, toTornado.X).Unit
+					local inward = toTornado.Unit
+
+					-- 스윙바이 효과: 회전 + 약간 끌림
+					tornadoInfluence = tornadoInfluence + (tangent * 3 + inward * 1.5) * pullStrength
+				end
+			end
+		end
+
+		self.BarrelPart.Position = basePosition + tornadoInfluence
 	end)
 end
 
@@ -211,7 +236,7 @@ function BaseBarrel:PlayExplodeEffects()
 	if self.ExplodeSound then
 		local remoteEvent = ReplicatedStorage:FindFirstChild("PlaySoundEvent")
 		if remoteEvent then
-			remoteEvent:FireAllClients(self.ExplodeSound, 0, 1.5)
+			remoteEvent:FireAllClients(self.ExplodeSound, 0, 1)
 		end
 	end
 
@@ -229,10 +254,8 @@ function BaseBarrel:PlayExplodeEffects()
 		effectPart.Transparency = 1
 		effectPart.Parent = workspace
 
-		local attachment = Instance.new("Attachment")
-		attachment.Parent = effectPart
-
 		local effectFolder = ServerStorage:FindFirstChild("Effect")
+		local particlesToEmit = {}
 
 		if effectFolder then
 			for _, effectName in ipairs(self.ExplodeEffects) do
@@ -240,26 +263,32 @@ function BaseBarrel:PlayExplodeEffects()
 
 				if effectTemplate then
 					if effectTemplate:IsA("ParticleEmitter") then
-						-- ParticleEmitter인 경우
 						local effect = effectTemplate:Clone()
-						effect.Enabled = false  -- 지속 재생 방지
-						effect.Parent = attachment
+						effect.Enabled = false
+						effect.Parent = effectPart
 						local emitCount = effect:GetAttribute("EmitCount") or 10
-						effect:Emit(emitCount)
-					elseif effectTemplate:IsA("Folder") or effectTemplate:IsA("Model") then
-						-- 폴더/모델 안에 ParticleEmitter가 있는 경우
+						table.insert(particlesToEmit, {emitter = effect, count = emitCount})
+					else
 						for _, child in ipairs(effectTemplate:GetDescendants()) do
 							if child:IsA("ParticleEmitter") then
 								local effect = child:Clone()
-								effect.Enabled = false  -- 지속 재생 방지
-								effect.Parent = attachment
-								effect:Emit(effect:GetAttribute("EmitCount") or 10)
+								effect.Enabled = false
+								effect.Parent = effectPart
+								local emitCount = effect:GetAttribute("EmitCount") or 10
+								table.insert(particlesToEmit, {emitter = effect, count = emitCount})
 							end
 						end
 					end
 				end
 			end
 		end
+
+		-- 클라이언트 복제 대기 후 Emit 호출
+		task.defer(function()
+			for _, data in ipairs(particlesToEmit) do
+				data.emitter:Emit(data.count)
+			end
+		end)
 
 		-- 2초 후 이펙트 파트 제거
 		game.Debris:AddItem(effectPart, 2)
@@ -344,10 +373,18 @@ function BaseBarrel:GetPositionFromSubjectUsingYRaycast(subjectPosition)
 		end
 	end
 
-	-- 워크스페이스에서 SlowPart 및 이펙트 파트들 제외
+	-- 워크스페이스에서 SlowPart, 이펙트 파트들, WindZone, Tornado 제외
 	for _, v in pairs(workspace:GetDescendants()) do
-		if v:IsA("BasePart") and (v.Name:match("SlowPart") or table.find(effectNames, v.Name)) then
-			table.insert(excludeList, v)
+		if v:IsA("BasePart") then
+			local shouldExclude = v.Name:match("SlowPart")
+				or v.Name == "WindZone"
+				or v.Name == "Tornado"
+				or v.Name == "EffectAnchor"
+				or v:GetAttribute("WindBarrelZone")
+				or table.find(effectNames, v.Name)
+			if shouldExclude then
+				table.insert(excludeList, v)
+			end
 		end
 	end
 
@@ -420,25 +457,84 @@ function BaseBarrel:FloatOnWater(_position)
 	local loudSpeaker = LoudSpeaker.new()
 	loudSpeaker:PlayLoudly(SoundService.SplashWater)
 
+	-- 현재 배럴 위치와 속도 저장
+	local currentPosition = self.BarrelPart.Position
+	local currentVelocity = self.BarrelPart.AssemblyLinearVelocity or Vector3.new(0, -20, 0)
+
 	local barrelClone = self.BarrelPart:Clone()
-	barrelClone.CanCollide = true
-	task.wait()
+	barrelClone.Name = "FloatingBarrel"
+	barrelClone.Transparency = 0
+	barrelClone.CanCollide = false  -- 물과 충돌 안함
+	barrelClone.Anchored = false
+	barrelClone.Position = currentPosition
 	barrelClone.Parent = workspace
-	
-	local modelDestroyer = ServerStorage.Scripts.ModelDestroyer:Clone()
 
-	-- Configuration과 WaitTime을 Clone된 스크립트에 미리 생성
-	local configuration = Instance.new("Configuration")
-	configuration.Name = "Configuration"
-	configuration.Parent = modelDestroyer
+	-- 물 표면 높이 계산 (대략적으로 현재 위치 기준)
+	local waterSurfaceY = currentPosition.Y + 2  -- 물 표면 추정
 
-	local waitTime = Instance.new("IntValue")
-	waitTime.Name = "WaitTime"
-	waitTime.Value = 5
-	waitTime.Parent = configuration
+	-- 물리 시뮬레이션으로 자연스럽게 떨어지다가 물 위에 뜨기
+	local floatForce = Instance.new("BodyForce")
+	floatForce.Name = "FloatForce"
+	floatForce.Force = Vector3.new(0, 0, 0)  -- 처음엔 힘 없음
+	floatForce.Parent = barrelClone
 
-	modelDestroyer.Parent = barrelClone
-	
+	-- 초기 속도 적용 (던진 방향 유지)
+	barrelClone.AssemblyLinearVelocity = currentVelocity * 0.3  -- 물 저항으로 속도 감소
+
+	-- 부력 시뮬레이션
+	local startTime = tick()
+	local floatHeight = waterSurfaceY - 1  -- 물 위로 살짝 나오는 높이
+	local dampening = 0.95  -- 출렁임 감쇠
+
+	task.spawn(function()
+		local heartbeatConnection
+		heartbeatConnection = RunService.Heartbeat:Connect(function()
+			if not barrelClone or not barrelClone.Parent then
+				heartbeatConnection:Disconnect()
+				return
+			end
+
+			local elapsed = tick() - startTime
+			local pos = barrelClone.Position
+
+			-- 물 속에 들어갔을 때 부력 적용
+			if pos.Y < floatHeight then
+				local depth = floatHeight - pos.Y
+				local buoyancy = math.min(depth * 800, 2000)  -- 깊이에 비례한 부력
+				floatForce.Force = Vector3.new(0, buoyancy, 0)
+
+				-- 수평 속도 감쇠 (물 저항)
+				local vel = barrelClone.AssemblyLinearVelocity
+				barrelClone.AssemblyLinearVelocity = Vector3.new(vel.X * dampening, vel.Y, vel.Z * dampening)
+			else
+				-- 물 위로 나오면 중력만 적용
+				floatForce.Force = Vector3.new(0, 0, 0)
+			end
+
+			-- 회전 감쇠 (물에서 안정화)
+			local angVel = barrelClone.AssemblyAngularVelocity
+			barrelClone.AssemblyAngularVelocity = angVel * 0.98
+
+			-- 5초 후 서서히 가라앉기 시작
+			if elapsed > 5 then
+				heartbeatConnection:Disconnect()
+				floatForce:Destroy()
+
+				-- 서서히 가라앉으면서 사라지기
+				task.spawn(function()
+					for i = 1, 20 do
+						if not barrelClone or not barrelClone.Parent then break end
+						barrelClone.Transparency = i / 20
+						barrelClone.Position = barrelClone.Position - Vector3.new(0, 0.1, 0)
+						task.wait(0.1)
+					end
+					if barrelClone and barrelClone.Parent then
+						barrelClone:Destroy()
+					end
+				end)
+			end
+		end)
+	end)
 end
 
 return BaseBarrel

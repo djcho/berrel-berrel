@@ -84,7 +84,10 @@ end
 
 function ChargingThrowType:initialize(tool)
 	BaseThrowType.initialize(self, tool)
+	self.IsEquipped = false  -- 장착 상태 추적
+
 	self.Tool.Equipped:Connect(function(mouse)
+		self.IsEquipped = true
 		self:onEquipped(mouse)
 		mouse.Button1Down:Connect(function() self:onMouseDown() end)
 		mouse.Button1Up:Connect(function() self:onMouseUp() end)
@@ -93,6 +96,7 @@ function ChargingThrowType:initialize(tool)
 
 	UserInputService.TouchStarted:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
+		if not self.IsEquipped then return end  -- 장착 중일 때만 반응
 		if input.UserInputType == Enum.UserInputType.Touch then
 			self:onMouseDown()
 		end
@@ -100,12 +104,16 @@ function ChargingThrowType:initialize(tool)
 
 	UserInputService.TouchEnded:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
+		if not self.IsEquipped then return end  -- 장착 중일 때만 반응
 		if input.UserInputType == Enum.UserInputType.Touch then
 			self:onMouseUp()
 		end
 	end)
 
-	self.Tool.Unequipped:Connect(function() self:onUnequipped() end)
+	self.Tool.Unequipped:Connect(function()
+		self.IsEquipped = false
+		self:onUnequipped()
+	end)
 end
 
 function ChargingThrowType:onEquipped(mouse)

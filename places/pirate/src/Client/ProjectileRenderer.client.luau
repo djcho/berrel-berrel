@@ -5,7 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
-local LocalPlayer = Players.LocalPlayer
+local _LocalPlayer = Players.LocalPlayer
 local throwingBarrelEvent = ReplicatedStorage:WaitForChild("ThrowingBarrelEvent")
 
 -- 투사체 렌더링 함수
@@ -34,10 +34,11 @@ local function renderProjectile(barrelPart, x0, v0, g, flightTime)
 
 	local startTime = tick()
 	local maxTime = flightTime * 2  -- 최대 비행 시간
+	local tornadoInfluence = Vector3.new(0, 0, 0)  -- 토네이도 영향 누적
 
 	-- RenderStepped으로 부드러운 렌더링
 	local connection
-	connection = RunService.RenderStepped:Connect(function(deltaTime)
+	connection = RunService.RenderStepped:Connect(function(_deltaTime)
 		local elapsedTime = tick() - startTime
 
 		-- 시간 초과 또는 투사체 제거됨
@@ -50,7 +51,28 @@ local function renderProjectile(barrelPart, x0, v0, g, flightTime)
 		end
 
 		-- 포물선 위치 계산
-		local position = 0.5 * g * elapsedTime * elapsedTime + v0 * elapsedTime + x0
+		local basePosition = 0.5 * g * elapsedTime * elapsedTime + v0 * elapsedTime + x0
+
+		-- 토네이도 영향 체크 (서버와 동일한 로직)
+		for _, child in workspace:GetChildren() do
+			if child.Name == "Tornado" and child:IsA("BasePart") then
+				local toTornado = child.Position - basePosition
+				local distToTornado = toTornado.Magnitude
+				local tornadoRadius = 20  -- 토네이도 영향 범위
+
+				if distToTornado < tornadoRadius then
+					-- 토네이도에 가까울수록 강하게 끌림
+					local pullStrength = (tornadoRadius - distToTornado) / tornadoRadius
+					local tangent = Vector3.new(-toTornado.Z, 0, toTornado.X).Unit
+					local inward = toTornado.Unit
+
+					-- 스윙바이 효과: 회전 + 약간 끌림
+					tornadoInfluence = tornadoInfluence + (tangent * 3 + inward * 1.5) * pullStrength
+				end
+			end
+		end
+
+		local position = basePosition + tornadoInfluence
 
 		-- 회전 애니메이션
 		if random == 0 then

@@ -377,8 +377,13 @@ function MatchController:startMatch()
 	end
 	self.damageLog = {}
 
-	-- 모든 플레이어 리스폰
+	-- 모든 플레이어 리스폰 (HasDiedOnce 리셋하여 인벤토리 재구성)
 	for _, player in ipairs(Players:GetPlayers()) do
+		-- HasDiedOnce를 false로 설정하여 인벤토리가 재구성되도록 함
+		local hasDiedOnce = player:FindFirstChild("HasDiedOnce")
+		if hasDiedOnce then
+			hasDiedOnce.Value = false
+		end
 		player:LoadCharacter()
 	end
 
@@ -448,13 +453,19 @@ function MatchController:resetForNewMatch()
 	self.countdownTime = 0
 	self.endCountdown = 0
 
-	-- 통계 초기화
+	-- 통계 초기화 및 플레이어 리스폰 (대기 상태 인벤토리로)
 	for _, player in ipairs(Players:GetPlayers()) do
 		self.kills[player.Name] = 0
 		self.deaths[player.Name] = 0
 		self.assists[player.Name] = 0
 		-- 팀 재배정
 		TeamService:AssignTeam(player)
+		-- HasDiedOnce를 false로 설정하여 대기 상태 인벤토리로 재구성
+		local hasDiedOnce = player:FindFirstChild("HasDiedOnce")
+		if hasDiedOnce then
+			hasDiedOnce.Value = false
+		end
+		player:LoadCharacter()
 	end
 	self.damageLog = {}
 

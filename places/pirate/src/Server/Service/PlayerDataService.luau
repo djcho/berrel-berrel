@@ -27,6 +27,24 @@ local function getShopService()
 	return ShopService
 end
 
+-- MatchController 지연 로딩 (순환 참조 방지)
+local MatchController = nil
+local function getMatchController()
+	if not MatchController then
+		MatchController = require(game:GetService("ServerScriptService"):WaitForChild("Controller"):WaitForChild("MatchController"))
+	end
+	return MatchController
+end
+
+-- 대기 상태인지 확인
+local function isWaitingState()
+	local success, result = pcall(function()
+		local controller = getMatchController()
+		return controller.gameState == "waiting" or controller.gameState == "starting"
+	end)
+	return success and result
+end
+
 function PlayerDataService:Initialize()
 	Players.PlayerAdded:Connect(function(player)
 		self:OnPlayerJoined(player)
@@ -55,25 +73,54 @@ function PlayerDataService:SetupLeaderstats(player)
 	intValue.Value = 0
 end
 
+-- 최대 업그레이드 설정 (대기실용)
+local MAX_UPGRADE_CONFIG = {
+	MaxShots = 99,       -- 대기실: 무한 (99개)
+	ReloadReduction = 1.5,  -- 재장전 시간 -1.5초
+}
+
+-- 업그레이드 설정 (ShopService와 동일)
+local UPGRADE_CONFIG = {
+	Cooldown = { bonusPerLevel = 0.5 },
+	MaxShots = { bonusPerLevel = 1 },
+}
+
 -- 배럴 상태 초기화 함수
-function PlayerDataService:InitializeBarrelStatus(player)
+function PlayerDataService:InitializeBarrelStatus(player, isWaiting)
 	local playerData = UserData.ReturnData(player)
-	playerData.ToolStatus = playerData.ToolStatus or {}
+	-- ToolStatus 완전 초기화 (대기실 → 게임 시작 전환 시 필요)
+	playerData.ToolStatus = {}
 
 	local inventory = InventoryService:GetOrCreateInventory(player)
 
 	for _, item in pairs(inventory) do
 		local toolName = item.Name
 		local toolItemInfo = ItemDb.Tool[toolName]
-		if toolItemInfo and not playerData.ToolStatus[toolName] then
+		if toolItemInfo then
+			local maxShots = toolItemInfo.MaxShots
+			local reloadTime = toolItemInfo.ReloadTime
+
+			-- 대기 상태면 최고 능력치 적용
+			if isWaiting then
+				maxShots = maxShots + MAX_UPGRADE_CONFIG.MaxShots
+				reloadTime = math.max(0.5, reloadTime - MAX_UPGRADE_CONFIG.ReloadReduction)
+			else
+				-- 게임 중에는 업그레이드 적용
+				local upgrades = playerData.BarrelUpgrades and playerData.BarrelUpgrades[toolName]
+				if upgrades then
+					maxShots = maxShots + (upgrades.MaxShots or 0) * UPGRADE_CONFIG.MaxShots.bonusPerLevel
+					reloadTime = math.max(0.5, reloadTime - (upgrades.Cooldown or 0) * UPGRADE_CONFIG.Cooldown.bonusPerLevel)
+				end
+			end
+
 			playerData.ToolStatus[toolName] = {
 				ToolName = toolName,
-				MaxShots = toolItemInfo.MaxShots,
-				ShotLeft = toolItemInfo.MaxShots,
+				MaxShots = maxShots,
+				ShotLeft = maxShots,
 				Reloading = {},
-				ReloadTime = toolItemInfo.ReloadTime
+				ReloadTime = reloadTime
 			}
-			for i = 1, toolItemInfo.MaxShots do
+			for _ = 1, maxShots do
 				table.insert(playerData.ToolStatus[toolName].Reloading, false)
 			end
 		end
@@ -111,9 +158,23 @@ function PlayerDataService:OnCharacterAdded(character)
 
 	InventoryService:ClearInventory(player)
 
-	-- 해금된 배럴만 인벤토리에 추가
+	-- 대기 상태면 모든 통 해금, 아니면 해금된 통만
 	local playerData = UserData.ReturnData(player)
-	local unlockedBarrels = playerData.UnlockedBarrels or { NormalBarrel = true }
+	local unlockedBarrels
+
+	if isWaitingState() then
+		-- 대기 상태: 모든 통 사용 가능
+		unlockedBarrels = {
+			NormalBarrel = true,
+			OilBarrel = true,
+			FireBarrel = true,
+			PoisonBarrel = true,
+			WindBarrel = true,
+		}
+	else
+		-- 게임 진행 중: 해금된 통만
+		unlockedBarrels = playerData.UnlockedBarrels or { NormalBarrel = true }
+	end
 
 	if unlockedBarrels["NormalBarrel"] then
 		InventoryService:AddItem(player, NormalBarrelItem.new())
@@ -131,8 +192,8 @@ function PlayerDataService:OnCharacterAdded(character)
 		InventoryService:AddItem(player, WindBarrelItem.new())
 	end
 
-	-- 배럴 상태 초기화
-	self:InitializeBarrelStatus(player)
+	-- 배럴 상태 초기화 (대기 상태면 최고 능력치로)
+	self:InitializeBarrelStatus(player, isWaitingState())
 end
 
 

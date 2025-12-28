@@ -120,29 +120,66 @@ local function TakeToxicDotDamage(humanoid, targetPlayer)
 end
 
 -- 초록색 독성 화염 이펙트 생성
-local fire = Instance.new("Fire", script.Parent)
-fire.Color = Color3.fromRGB(0, 255, 0)  -- 초록색 불꽃
-fire.SecondaryColor = Color3.fromRGB(100, 200, 50)  -- 연두색 보조 색상
+local isCharacter = CommonUtil:IsPartIncludedCharacter(script.Parent)
 
-local smoke = Instance.new("Smoke", script.Parent)
-smoke.Color = Color3.fromRGB(50, 150, 50)  -- 초록색 연기
-smoke.Opacity = 0.05
-smoke.RiseVelocity = 6
-smoke.Size = 0.15
-smoke.Parent = fire.Parent
+-- 투명 파트들을 담을 테이블
+local fireParts = {}
 
-if CommonUtil:IsPartIncludedCharacter(script.Parent) then
-	fire.Size = 6  -- 캐릭터에 붙은 불은 더 큼
+if isCharacter then
+	-- 캐릭터에 붙은 경우: 직접 Fire 붙임
+	local fire = Instance.new("Fire")
+	fire.Name = "ToxicFire"
+	fire.Color = Color3.fromRGB(0, 255, 0)
+	fire.SecondaryColor = Color3.fromRGB(100, 200, 50)
+	fire.Size = 5
+	fire.Heat = 8
+	fire.Parent = script.Parent
 else
-	local originalSize = script.Parent:GetAttribute("OriginalSize")
-	if originalSize then
-		fire.Size = math.abs(originalSize.X) + math.abs(originalSize.Y) + math.abs(originalSize.Z)
-	else
-		-- OriginalSize가 없으면 파트의 실제 크기 사용
-		local partSize = script.Parent.Size
-		fire.Size = math.abs(partSize.X) + math.abs(partSize.Y) + math.abs(partSize.Z)
+	-- 독구름 영역에 빽빽하게 불씨 배치
+	local model = script.Parent.Parent
+	local partSize = script.Parent.Size
+	local centerPos = script.Parent.Position
+
+	-- 불씨 개수: 많이 (10~20개)
+	local fireCount = math.clamp(math.floor((partSize.X + partSize.Z) * 2), 10, 20)
+
+	for _ = 1, fireCount do
+		-- 독구름 영역 내 3D 랜덤 위치 (빽빽하게)
+		local offsetX = (math.random() - 0.5) * partSize.X * 0.9
+		local offsetZ = (math.random() - 0.5) * partSize.Z * 0.9
+		local offsetY = math.random() * partSize.Y * 1.5  -- 높이도 분산
+
+		-- 투명 파트 생성
+		local firePart = Instance.new("Part")
+		firePart.Name = "ToxicFirePart"
+		firePart.Size = Vector3.new(0.5, 0.5, 0.5)
+		firePart.Position = centerPos + Vector3.new(offsetX, offsetY, offsetZ)
+		firePart.Anchored = true
+		firePart.CanCollide = false
+		firePart.CanQuery = false
+		firePart.CanTouch = false
+		firePart.Transparency = 1
+		firePart.Parent = model
+		table.insert(fireParts, firePart)
+
+		-- 큰 Fire 붙이기
+		local fire = Instance.new("Fire")
+		fire.Name = "ToxicFire"
+		fire.Color = Color3.fromRGB(0, 255, 0)
+		fire.SecondaryColor = Color3.fromRGB(100, 200, 50)
+		fire.Size = 4 + math.random() * 3  -- 크기 4~7
+		fire.Heat = 5 + math.random() * 3  -- 높이 5~8
+		fire.Parent = firePart
 	end
 end
+
+-- 연기
+local smoke = Instance.new("Smoke")
+smoke.Color = Color3.fromRGB(50, 150, 50)
+smoke.Opacity = 0.05
+smoke.RiseVelocity = 5
+smoke.Size = 0.15
+smoke.Parent = script.Parent
 
 task.wait(0.15)
 
@@ -163,7 +200,10 @@ if script.Parent.Parent.Name:match("Poison") then
 	end
 
 	task.wait(12)  -- 독성 화염은 12초 지속 (일반 10초보다 길음)
-	fire:Destroy()
+	-- 투명 파트와 Fire 제거
+	for _, part in fireParts do
+		part:Destroy()
+	end
 	smoke:Destroy()
 
 	script.Parent.Material = Enum.Material.CorrodedMetal
@@ -173,7 +213,7 @@ if script.Parent.Parent.Name:match("Poison") then
 
 	local poisonPartCount = 0
 	for _, v in pairs(script.Parent.Parent:GetChildren()) do
-		if v:IsA("BasePart") then
+		if v:IsA("BasePart") and not v.Name:match("ToxicFirePart") then
 			poisonPartCount += 1
 		end
 	end
@@ -192,7 +232,11 @@ elseif CommonUtil:IsPartIncludedCharacter(script.Parent) then
 	end)
 	task.wait(5)  -- 캐릭터에 붙은 독성 화염은 5초 지속
 	burningEndFlag = true
-	fire:Destroy()
+	-- 캐릭터는 직접 붙인 Fire만 제거
+	local toxicFire = script.Parent:FindFirstChild("ToxicFire")
+	if toxicFire then
+		toxicFire:Destroy()
+	end
 	smoke:Destroy()
 	script:Destroy()
 	return
