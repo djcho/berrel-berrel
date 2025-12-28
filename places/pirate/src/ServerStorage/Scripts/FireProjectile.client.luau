@@ -1,3 +1,8 @@
+--[[
+	FireProjectile: 모든 Tool에서 사용하는 공통 발사 스크립트
+	Tool에 동적으로 추가되어 마우스 입력 및 발사를 처리합니다.
+]]
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local tool = script.Parent

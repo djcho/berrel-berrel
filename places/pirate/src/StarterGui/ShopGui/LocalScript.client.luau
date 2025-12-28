@@ -487,8 +487,25 @@ local function updateUpgradeDisplay(barrelName)
 
 	for upgradeType, config in pairs(upgradeConfig) do
 		local currentLevel = data.upgrades[upgradeType] or 0
-		local nextPrice = currentLevel < config.maxLevel and config.prices[currentLevel + 1] or 0
-		createUpgradeRow(upgradeType, currentLevel, config.maxLevel, nextPrice, barrelName)
+		local maxLevel, prices
+
+		-- MaxShots는 배럴별 설정 사용
+		if upgradeType == "MaxShots" and config.perBarrel then
+			local perBarrelConfig = config.perBarrel[barrelName]
+			if perBarrelConfig then
+				maxLevel = perBarrelConfig.maxLevel
+				prices = perBarrelConfig.prices
+			else
+				maxLevel = 0
+				prices = {}
+			end
+		else
+			maxLevel = config.maxLevel
+			prices = config.prices
+		end
+
+		local nextPrice = currentLevel < maxLevel and prices[currentLevel + 1] or 0
+		createUpgradeRow(upgradeType, currentLevel, maxLevel, nextPrice, barrelName)
 	end
 end
 

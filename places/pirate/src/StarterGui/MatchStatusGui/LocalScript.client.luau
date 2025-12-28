@@ -373,6 +373,62 @@ if gameStateEvent then
 	gameStateEvent.OnClientEvent:Connect(updateStatus)
 end
 
+-- MatchUpdate 이벤트 (게임 중 상태 업데이트)
+local matchUpdateEvent = ReplicatedStorage:WaitForChild("MatchUpdate", 10)
+if matchUpdateEvent then
+	matchUpdateEvent.OnClientEvent:Connect(function(data)
+		if data.state == "countdown" then
+			-- 카운트다운 상태
+			showStatusFrames()
+			timerFrame.Visible = false
+			stateLabel.Text = "게임 시작!"
+			stateLabel.TextColor3 = COLORS.green
+			timeLabel.Text = tostring(data.time or 0)
+			timeLabel.TextColor3 = COLORS.white
+			timeLabel.TextSize = 48
+			messageLabel.Text = "준비하세요!"
+			messageLabel.TextColor3 = COLORS.gold
+
+		elseif data.state == "cancelled" then
+			-- 게임 취소
+			showStatusFrames()
+			timerFrame.Visible = false
+			stateLabel.Text = "대기 중"
+			stateLabel.TextColor3 = COLORS.gold
+			timeLabel.Text = ""
+			messageLabel.Text = data.message or "게임 시작 취소"
+			messageLabel.TextColor3 = COLORS.parchment
+
+		elseif data.state == "started" then
+			-- 게임 시작됨
+			hideStatusFrames()
+			timerFrame.Visible = true
+			local remaining = data.matchTime or 300
+			local mins = math.floor(remaining / 60)
+			local secs = math.floor(remaining % 60)
+			timerText.Text = string.format("%d:%02d", mins, secs)
+			timerText.TextColor3 = COLORS.white
+
+		elseif data.state == "playing" then
+			-- 게임 진행 중
+			hideStatusFrames()
+			timerFrame.Visible = true
+			local remaining = data.timeRemaining or 0
+			local mins = math.floor(remaining / 60)
+			local secs = math.floor(remaining % 60)
+			timerText.Text = string.format("%d:%02d", mins, secs)
+
+			if remaining <= 30 then
+				timerText.TextColor3 = COLORS.red
+			elseif remaining <= 60 then
+				timerText.TextColor3 = COLORS.gold
+			else
+				timerText.TextColor3 = COLORS.white
+			end
+		end
+	end)
+end
+
 local gameEndEvent = ReplicatedStorage:WaitForChild("GameEnd", 10)
 if gameEndEvent then
 	gameEndEvent.OnClientEvent:Connect(showGameResult)

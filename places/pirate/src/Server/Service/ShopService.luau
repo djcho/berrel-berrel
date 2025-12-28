@@ -19,6 +19,29 @@ local function getInventoryService()
 	return InventoryService
 end
 
+-- MatchController 지연 로딩 (순환 참조 방지)
+local MatchController = nil
+local function getMatchController()
+	if not MatchController then
+		MatchController = require(game:GetService("ServerScriptService"):WaitForChild("Controller"):WaitForChild("MatchController"))
+	end
+	return MatchController
+end
+
+-- 대기 상태인지 확인
+local function isWaitingState()
+	local success, result = pcall(function()
+		local controller = getMatchController()
+		local state = controller.gameState
+		return state == "waiting" or state == "starting"
+	end)
+	-- pcall 실패시 (MatchController 미초기화 등) 대기 상태로 간주
+	if not success then
+		return true
+	end
+	return result
+end
+
 -- 배럴 아이템 클래스 맵 (지연 로딩)
 local BarrelItemClasses = nil
 local function getBarrelItemClasses()
@@ -56,7 +79,7 @@ local UPGRADE_CONFIG = {
 	Range = {
 		maxLevel = 5,
 		prices = { 40, 80, 120, 160, 240 },
-		bonusPerLevel = 20,  -- 레벨당 사거리 +20
+		bonusPerLevel = 8,  -- 레벨당 사거리 +8
 	},
 	-- 쿨타임 감소 업그레이드 (최대 3레벨)
 	Cooldown = {
@@ -64,11 +87,17 @@ local UPGRADE_CONFIG = {
 		prices = { 100, 200, 300 },
 		bonusPerLevel = 0.5,  -- 레벨당 재장전 시간 -0.5초
 	},
-	-- 보유 갯수 업그레이드 (최대 3레벨)
+	-- 보유 갯수 업그레이드 (배럴별로 다름)
 	MaxShots = {
-		maxLevel = 3,
-		prices = { 150, 300, 500 },
 		bonusPerLevel = 1,  -- 레벨당 최대 보유 +1
+		-- 배럴별 최대 레벨 설정
+		perBarrel = {
+			NormalBarrel = { maxLevel = 2, prices = { 150, 300 } },           -- 2 -> 4
+			OilBarrel = { maxLevel = 2, prices = { 150, 300 } },              -- 1 -> 3
+			FireBarrel = { maxLevel = 1, prices = { 200 } },                  -- 1 -> 2
+			PoisonBarrel = { maxLevel = 2, prices = { 150, 300 } },           -- 1 -> 3
+			WindBarrel = { maxLevel = 1, prices = { 200 } },                  -- 1 -> 2
+		},
 	},
 }
 
@@ -131,6 +160,14 @@ function ShopService:Initialize()
 		return self:GetPlayerShopData(player)
 	end
 
+	-- ToolInfo 업데이트 이벤트 (업그레이드 후 클라이언트에 전달)
+	local toolInfoUpdateEvent = shopFolder:FindFirstChild("ToolInfoUpdateEvent")
+	if not toolInfoUpdateEvent then
+		toolInfoUpdateEvent = Instance.new("RemoteEvent")
+		toolInfoUpdateEvent.Name = "ToolInfoUpdateEvent"
+		toolInfoUpdateEvent.Parent = shopFolder
+	end
+
 	print("[ShopService] 초기화 완료")
 end
 
@@ -159,7 +196,7 @@ function ShopService:InitializePlayerShopData(player)
 	end
 end
 
--- 특정 통의 ToolStatus 초기화
+-- 특정 통의 ToolStatus 초기화 (업그레이드 반영)
 function ShopService:InitializeBarrelToolStatus(player, barrelName)
 	local playerData = UserData.ReturnData(player)
 	if not playerData then return end
@@ -168,14 +205,19 @@ function ShopService:InitializeBarrelToolStatus(player, barrelName)
 
 	local toolItemInfo = ItemDb.Tool[barrelName]
 	if toolItemInfo and not playerData.ToolStatus[barrelName] then
+		-- 업그레이드 적용
+		local upgrades = playerData.BarrelUpgrades and playerData.BarrelUpgrades[barrelName] or {}
+		local maxShots = toolItemInfo.MaxShots + (upgrades.MaxShots or 0) * UPGRADE_CONFIG.MaxShots.bonusPerLevel
+		local reloadTime = math.max(0.5, toolItemInfo.ReloadTime - (upgrades.Cooldown or 0) * UPGRADE_CONFIG.Cooldown.bonusPerLevel)
+
 		playerData.ToolStatus[barrelName] = {
 			ToolName = barrelName,
-			MaxShots = toolItemInfo.MaxShots,
-			ShotLeft = toolItemInfo.MaxShots,
+			MaxShots = maxShots,
+			ShotLeft = maxShots,
 			Reloading = {},
-			ReloadTime = toolItemInfo.ReloadTime
+			ReloadTime = reloadTime
 		}
-		for _ = 1, toolItemInfo.MaxShots do
+		for _ = 1, maxShots do
 			table.insert(playerData.ToolStatus[barrelName].Reloading, false)
 		end
 	end
@@ -183,6 +225,11 @@ end
 
 -- 통 해금
 function ShopService:UnlockBarrel(player, barrelName)
+	-- 대기 상태에서는 상점 이용 불가
+	if isWaitingState() then
+		return { success = false, message = "대기 중에는 상점을 이용할 수 없습니다." }
+	end
+
 	local playerData = UserData.ReturnData(player)
 	if not playerData then
 		return { success = false, message = "플레이어 데이터를 찾을 수 없습니다." }
@@ -220,11 +267,22 @@ function ShopService:UnlockBarrel(player, barrelName)
 		getInventoryService():AddItem(player, barrelItemClass.new())
 	end
 
+	-- 레벨업 사운드 재생
+	local playSoundEvent = ReplicatedStorage:FindFirstChild("PlaySoundEvent")
+	if playSoundEvent then
+		playSoundEvent:FireClient(player, "LevelUp", 0, 2)
+	end
+
 	return { success = true, message = barrelName .. " 해금 완료!" }
 end
 
 -- 통 업그레이드
 function ShopService:UpgradeBarrel(player, barrelName, upgradeType)
+	-- 대기 상태에서는 상점 이용 불가
+	if isWaitingState() then
+		return { success = false, message = "대기 중에는 상점을 이용할 수 없습니다." }
+	end
+
 	local playerData = UserData.ReturnData(player)
 	if not playerData then
 		return { success = false, message = "플레이어 데이터를 찾을 수 없습니다." }
@@ -241,14 +299,28 @@ function ShopService:UpgradeBarrel(player, barrelName, upgradeType)
 		return { success = false, message = "존재하지 않는 업그레이드 타입입니다." }
 	end
 
+	-- MaxShots는 배럴별 설정 사용
+	local maxLevel, prices
+	if upgradeType == "MaxShots" and upgradeConfig.perBarrel then
+		local perBarrelConfig = upgradeConfig.perBarrel[barrelName]
+		if not perBarrelConfig then
+			return { success = false, message = "해당 통은 이 업그레이드를 사용할 수 없습니다." }
+		end
+		maxLevel = perBarrelConfig.maxLevel
+		prices = perBarrelConfig.prices
+	else
+		maxLevel = upgradeConfig.maxLevel
+		prices = upgradeConfig.prices
+	end
+
 	-- 현재 레벨 확인
 	local currentLevel = playerData.BarrelUpgrades[barrelName][upgradeType] or 0
-	if currentLevel >= upgradeConfig.maxLevel then
+	if currentLevel >= maxLevel then
 		return { success = false, message = "이미 최대 레벨입니다." }
 	end
 
 	-- 가격 확인
-	local price = upgradeConfig.prices[currentLevel + 1]
+	local price = prices[currentLevel + 1]
 	local leaderstats = player:FindFirstChild("leaderstats")
 	local coins = leaderstats and leaderstats:FindFirstChild("Coins")
 	if not coins or coins.Value < price then
@@ -262,11 +334,35 @@ function ShopService:UpgradeBarrel(player, barrelName, upgradeType)
 	-- ToolStatus 업데이트 (실시간 적용)
 	self:ApplyUpgradeToToolStatus(player, barrelName, upgradeType)
 
+	-- 클라이언트에 업데이트된 ToolInfo 전송 (사거리 등 실시간 반영)
+	self:SendToolInfoUpdate(player, barrelName)
+
+	-- 레벨업 사운드 재생
+	local playSoundEvent = ReplicatedStorage:FindFirstChild("PlaySoundEvent")
+	if playSoundEvent then
+		playSoundEvent:FireClient(player, "LevelUp", 0, 2)
+	end
+
 	return {
 		success = true,
 		message = upgradeType .. " 업그레이드 완료! (Lv." .. (currentLevel + 1) .. ")",
 		newLevel = currentLevel + 1
 	}
+end
+
+-- 클라이언트에 업데이트된 ToolInfo 전송
+function ShopService:SendToolInfoUpdate(player, barrelName)
+	local shopFolder = ReplicatedStorage:FindFirstChild("ShopSystem")
+	if not shopFolder then return end
+
+	local toolInfoUpdateEvent = shopFolder:FindFirstChild("ToolInfoUpdateEvent")
+	if not toolInfoUpdateEvent then return end
+
+	-- 업그레이드된 스탯 계산
+	local upgradedStats = self:GetBarrelStats(player, barrelName)
+	if upgradedStats then
+		toolInfoUpdateEvent:FireClient(player, barrelName, upgradedStats)
+	end
 end
 
 -- 업그레이드 효과를 ToolStatus에 적용
@@ -309,12 +405,21 @@ function ShopService:GetBarrelStats(player, barrelName)
 
 	if not baseStats then return nil end
 
-	local upgrades = playerData and playerData.BarrelUpgrades and playerData.BarrelUpgrades[barrelName] or {}
+	local damageBonus, rangeBonus, cooldownReduction, maxShotsBonus
 
-	local damageBonus = (upgrades.Damage or 0) * UPGRADE_CONFIG.Damage.bonusPerLevel
-	local rangeBonus = (upgrades.Range or 0) * UPGRADE_CONFIG.Range.bonusPerLevel
-	local cooldownReduction = (upgrades.Cooldown or 0) * UPGRADE_CONFIG.Cooldown.bonusPerLevel
-	local maxShotsBonus = (upgrades.MaxShots or 0) * UPGRADE_CONFIG.MaxShots.bonusPerLevel
+	-- 대기 상태면 최대 업그레이드 적용 (MaxShots는 무한)
+	if isWaitingState() then
+		damageBonus = UPGRADE_CONFIG.Damage.maxLevel * UPGRADE_CONFIG.Damage.bonusPerLevel
+		rangeBonus = UPGRADE_CONFIG.Range.maxLevel * UPGRADE_CONFIG.Range.bonusPerLevel
+		cooldownReduction = UPGRADE_CONFIG.Cooldown.maxLevel * UPGRADE_CONFIG.Cooldown.bonusPerLevel
+		maxShotsBonus = 99  -- 대기 상태에서는 무한 (99개)
+	else
+		local upgrades = playerData and playerData.BarrelUpgrades and playerData.BarrelUpgrades[barrelName] or {}
+		damageBonus = (upgrades.Damage or 0) * UPGRADE_CONFIG.Damage.bonusPerLevel
+		rangeBonus = (upgrades.Range or 0) * UPGRADE_CONFIG.Range.bonusPerLevel
+		cooldownReduction = (upgrades.Cooldown or 0) * UPGRADE_CONFIG.Cooldown.bonusPerLevel
+		maxShotsBonus = (upgrades.MaxShots or 0) * UPGRADE_CONFIG.MaxShots.bonusPerLevel
+	end
 
 	return {
 		Damage = baseStats.Damage + damageBonus,
@@ -341,6 +446,10 @@ function ShopService:GetShopData(player)
 		local isUnlocked = playerData.UnlockedBarrels and playerData.UnlockedBarrels[barrelName] or false
 		local upgrades = playerData.BarrelUpgrades and playerData.BarrelUpgrades[barrelName] or {}
 
+		-- 배럴별 MaxShots 최대 레벨 가져오기
+		local maxShotsConfig = UPGRADE_CONFIG.MaxShots.perBarrel[barrelName]
+		local maxShotsMaxLevel = maxShotsConfig and maxShotsConfig.maxLevel or 0
+
 		shopData.barrels[barrelName] = {
 			displayName = baseStats.DisplayName,
 			iconId = baseStats.IconId,
@@ -359,6 +468,7 @@ function ShopService:GetShopData(player)
 				Cooldown = upgrades.Cooldown or 0,
 				MaxShots = upgrades.MaxShots or 0,
 			},
+			maxShotsMaxLevel = maxShotsMaxLevel,  -- 배럴별 MaxShots 최대 레벨
 			currentStats = self:GetBarrelStats(player, barrelName),
 		}
 	end
