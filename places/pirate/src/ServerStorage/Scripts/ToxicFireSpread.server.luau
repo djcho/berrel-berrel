@@ -138,7 +138,9 @@ else
 	if originalSize then
 		fire.Size = math.abs(originalSize.X) + math.abs(originalSize.Y) + math.abs(originalSize.Z)
 	else
-		fire.Size = 10
+		-- OriginalSize가 없으면 파트의 실제 크기 사용
+		local partSize = script.Parent.Size
+		fire.Size = math.abs(partSize.X) + math.abs(partSize.Y) + math.abs(partSize.Z)
 	end
 end
 
