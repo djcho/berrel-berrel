@@ -7,33 +7,102 @@ local MAX_BARREL_LEVEL = 4  -- 최대 배럴 레벨 설정
 local DEFAULT_LEVEL = 1  -- 기본 레벨 설정
 
 -- 서비스 로드
-local ServerStorage = game:GetService("ServerStorage")  -- 서버 스토리지
-local ReplicatedStorage = game:GetService("ReplicatedStorage")  -- 리플리케이티드 스토리지
-local throwingBarrelEvent = ReplicatedStorage:WaitForChild("ThrowingBarrelEvent")  -- 배럴 던지기 이벤트
-local RunService = game:GetService('RunService')  -- 런 서비스
+local ServerStorage = game:GetService("ServerStorage")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local throwingBarrelEvent = ReplicatedStorage:WaitForChild("ThrowingBarrelEvent")
+local RunService = game:GetService('RunService')
 local SoundService = game:GetService("SoundService")
 local LoudSpeaker = require(ServerStorage.Scripts.LoudSpeaker)
 local CommonUtil = require(ServerStorage.Scripts.CommonUtil)
+local ItemDb = require(ServerStorage.Items.Database.ItemDb)
 
 -- BaseBarrel 클래스 정의
 local BaseBarrel = {}
 BaseBarrel.__index = BaseBarrel
 
 -- 새로운 배럴 객체 생성 함수
-function BaseBarrel.new(player, barrelPart, level)
+-- toolInfo: ToolItem 인스턴스 (ItemDb의 설정을 포함)
+function BaseBarrel.new(player, toolInfo, level)
 	local self = setmetatable({}, BaseBarrel)
 
+	self.Player = player
+	self.Level = level or DEFAULT_LEVEL
+	self.onTouchedBarrelCooldown = false
+
+	-- toolInfo에서 시각/효과 설정 가져오기
+	self.ToolInfo = toolInfo
+	self.HitDamage = toolInfo.Damage
+	self.DotDamage = toolInfo.DotDamage or 0
+	self.MaxRange = toolInfo.MaxRange
+	self.ExplosionRadius = toolInfo.ExplosionRadius or 5
+	self.Name = toolInfo.DisplayName
+
+	-- ItemDb에서 시각/효과 설정 가져오기
+	local itemConfig = ItemDb.Tool[toolInfo.Name]
+	if itemConfig then
+		self.PartName = itemConfig.PartName
+		self.FallbackPartName = itemConfig.FallbackPartName
+		self.ExplodeEffects = itemConfig.ExplodeEffects or {}
+		self.ExplodeSound = itemConfig.ExplodeSound
+		self.TrailParticle = itemConfig.TrailParticle
+	end
+
+	-- 파트 생성 (PartName 사용)
+	local partName = self.PartName or toolInfo.Name
+
+	-- ServerStorage/Parts에서 파트 찾기
+	local partsFolder = ServerStorage:FindFirstChild("Parts")
+	local barrelPart = partsFolder and partsFolder:FindFirstChild(partName)
+
+	-- Fallback 파트 사용
+	if not barrelPart and self.FallbackPartName and partsFolder then
+		barrelPart = partsFolder:FindFirstChild(self.FallbackPartName)
+	end
+
 	if barrelPart then
-		-- 플레이어와 배럴 파트 설정
-		self.Player = player
-		self.onTouchedBarrelCooldown = false
 		self.BarrelPart = barrelPart:Clone()
 		local newPosition = player.Character.HumanoidRootPart.Position + Vector3.new(20, 22, -2)
 		self.BarrelPart.CFrame = CFrame.new(newPosition)
 		self.BarrelPart.CanTouch = true
 		self.BarrelPart.CanCollide = true
 		self.BarrelPart.Parent = workspace
-		self.BarrelPart:SetNetworkOwner(nil) -- 서버 소유로 설정
+		self.BarrelPart:SetNetworkOwner(nil)
+
+		-- 잔상 효과 추가 (TrailParticle 설정이 있으면)
+		-- 경로: ServerStorage/Trail/[TrailParticle]
+		if self.TrailParticle then
+			local trailFolder = ServerStorage:FindFirstChild("Trail")
+			if trailFolder then
+				local trailTemplate = trailFolder:FindFirstChild(self.TrailParticle)
+				if trailTemplate then
+					if trailTemplate:IsA("Trail") then
+						-- Trail 객체인 경우: 두 개의 Attachment 필요
+						local attachment0 = Instance.new("Attachment")
+						attachment0.Name = "TrailAttachment0"
+						attachment0.Position = Vector3.new(0, 0.5, 0)
+						attachment0.Parent = self.BarrelPart
+
+						local attachment1 = Instance.new("Attachment")
+						attachment1.Name = "TrailAttachment1"
+						attachment1.Position = Vector3.new(0, -0.5, 0)
+						attachment1.Parent = self.BarrelPart
+
+						local trail = trailTemplate:Clone()
+						trail.Attachment0 = attachment0
+						trail.Attachment1 = attachment1
+						trail.Parent = self.BarrelPart
+					elseif trailTemplate:IsA("ParticleEmitter") then
+						-- ParticleEmitter인 경우: Attachment 하나에 붙임
+						local attachment = Instance.new("Attachment")
+						attachment.Name = "TrailAttachment"
+						attachment.Parent = self.BarrelPart
+
+						local trail = trailTemplate:Clone()
+						trail.Parent = attachment
+					end
+				end
+			end
+		end
 
 		-- 배럴이 다른 객체와 충돌할 때 이벤트 연결
 		self.BarrelPart.Touched:Connect(function(touchedPart)
@@ -41,9 +110,10 @@ function BaseBarrel.new(player, barrelPart, level)
 				self:OnTouchingBarrel(touchedPart)
 			end
 		end)
+	else
+		warn("[BaseBarrel] Part not found: " .. tostring(partName))
 	end
 
-	self.Level = level or DEFAULT_LEVEL
 	return self
 end
 
@@ -74,9 +144,8 @@ function BaseBarrel:IsPlayerOrEquipmentPart(touchedPart)
 end
 
 -- 배럴을 목표 위치로 던지는 함수
-function BaseBarrel:Throw(targetPosition, maxRange)
+function BaseBarrel:Throw(targetPosition)
 	local player = self.Player
-	local handle = self.Part
 
 	local x0 = player.Character.HumanoidRootPart.Position + Vector3.new(0, 2, 0)
 	local mousePosition = targetPosition
@@ -86,9 +155,9 @@ function BaseBarrel:Throw(targetPosition, maxRange)
 	x0 = x0 + direction * 2
 
 	local distance = (targetPosition - x0).magnitude
-	if distance > maxRange then
-		distance = maxRange
-		targetPosition = x0 + (targetPosition - x0).unit * maxRange
+	if distance > self.MaxRange then
+		distance = self.MaxRange
+		targetPosition = x0 + (targetPosition - x0).unit * self.MaxRange
 	end
 
 	local t = distance / TIME_DIVISOR
@@ -124,10 +193,76 @@ function BaseBarrel:Throw(targetPosition, maxRange)
 end
 
 -- 배럴이 폭발하는 함수 (하위 클래스에서 재정의)
-function BaseBarrel:Explode(hitPart, hitPosition)
+function BaseBarrel:Explode(hitPart, _hitPosition)
 	if self:IsInWater(hitPart) then
 		self:FloatOnWater(hitPart)
 		return false
+	end
+
+	-- 폭발 이펙트 재생 (ItemDb 설정 사용)
+	self:PlayExplodeEffects()
+
+	return true
+end
+
+-- 폭발 이펙트와 사운드 재생 (ItemDb 설정 기반)
+function BaseBarrel:PlayExplodeEffects()
+	-- 폭발 사운드 재생
+	if self.ExplodeSound then
+		local remoteEvent = ReplicatedStorage:FindFirstChild("PlaySoundEvent")
+		if remoteEvent then
+			remoteEvent:FireAllClients(self.ExplodeSound, 0, 1.5)
+		end
+	end
+
+	-- 폭발 이펙트 재생
+	if self.ExplodeEffects and self.BarrelPart then
+		local barrelPosition = self.BarrelPart.Position
+
+		-- workspace에 고정된 파트 생성 (이펙트 표시용)
+		local effectPart = Instance.new("Part")
+		effectPart.Name = "EffectAnchor"
+		effectPart.Size = Vector3.new(1, 1, 1)
+		effectPart.Position = barrelPosition
+		effectPart.Anchored = true
+		effectPart.CanCollide = false
+		effectPart.Transparency = 1
+		effectPart.Parent = workspace
+
+		local attachment = Instance.new("Attachment")
+		attachment.Parent = effectPart
+
+		local effectFolder = ServerStorage:FindFirstChild("Effect")
+
+		if effectFolder then
+			for _, effectName in ipairs(self.ExplodeEffects) do
+				local effectTemplate = effectFolder:FindFirstChild(effectName)
+
+				if effectTemplate then
+					if effectTemplate:IsA("ParticleEmitter") then
+						-- ParticleEmitter인 경우
+						local effect = effectTemplate:Clone()
+						effect.Enabled = false  -- 지속 재생 방지
+						effect.Parent = attachment
+						local emitCount = effect:GetAttribute("EmitCount") or 10
+						effect:Emit(emitCount)
+					elseif effectTemplate:IsA("Folder") or effectTemplate:IsA("Model") then
+						-- 폴더/모델 안에 ParticleEmitter가 있는 경우
+						for _, child in ipairs(effectTemplate:GetDescendants()) do
+							if child:IsA("ParticleEmitter") then
+								local effect = child:Clone()
+								effect.Enabled = false  -- 지속 재생 방지
+								effect.Parent = attachment
+								effect:Emit(effect:GetAttribute("EmitCount") or 10)
+							end
+						end
+					end
+				end
+			end
+		end
+
+		-- 2초 후 이펙트 파트 제거
+		game.Debris:AddItem(effectPart, 2)
 	end
 end
 
@@ -238,12 +373,20 @@ end
 -- 배럴이 다른 객체와 충돌했을 때 호출되는 함수
 function BaseBarrel:OnTouchingBarrel(hitPart)
 	self.onTouchedBarrelCooldown = true
-	self.BarrelPart:Destroy()
 
-	local raycastResult = self:GetPositionFromSubjectUsingYRaycast(self.BarrelPart.Position)
+	-- 폭발 위치 저장 (Destroy 전에)
+	local barrelPosition = self.BarrelPart.Position
+	local raycastResult = self:GetPositionFromSubjectUsingYRaycast(barrelPosition)
+
 	if raycastResult then
+		-- 폭발 효과 및 OnTouched 먼저 실행 (BarrelPart가 아직 존재할 때)
 		self:OnTouched(hitPart)
 		self:Explode(hitPart, raycastResult.Position)
+	end
+
+	-- 이펙트 재생 후 파트 파괴
+	if self.BarrelPart and self.BarrelPart.Parent then
+		self.BarrelPart:Destroy()
 	end
 
 	self.onTouchedBarrelCooldown = false

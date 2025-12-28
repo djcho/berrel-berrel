@@ -6,10 +6,34 @@ ShopService.__index = ShopService
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
-local Players = game:GetService("Players")
 
 local UserData = require(ServerStorage.Scripts.UserData)
 local ItemDb = require(ServerStorage.Items.Database.ItemDb)
+
+-- InventoryService 지연 로딩 (순환 참조 방지)
+local InventoryService = nil
+local function getInventoryService()
+	if not InventoryService then
+		InventoryService = require(game:GetService("ServerScriptService"):WaitForChild("Service"):WaitForChild("InventoryService"))
+	end
+	return InventoryService
+end
+
+-- 배럴 아이템 클래스 맵 (지연 로딩)
+local BarrelItemClasses = nil
+local function getBarrelItemClasses()
+	if not BarrelItemClasses then
+		local ItemStorage = ServerStorage:WaitForChild("Items")
+		BarrelItemClasses = {
+			NormalBarrel = require(ItemStorage.NormalBarrelItem),
+			OilBarrel = require(ItemStorage.OilBarrelItem),
+			FireBarrel = require(ItemStorage.FireBarrelItem),
+			PoisonBarrel = require(ItemStorage.PoisonBarrelItem),
+			WindBarrel = require(ItemStorage.WindBarrelItem),
+		}
+	end
+	return BarrelItemClasses
+end
 
 -- 상점 아이템 설정 (통 해금 가격)
 local BARREL_UNLOCK_PRICES = {
@@ -49,39 +73,60 @@ local UPGRADE_CONFIG = {
 }
 
 function ShopService:Initialize()
-	-- RemoteFunction/Event 생성
-	local shopFolder = Instance.new("Folder")
-	shopFolder.Name = "ShopSystem"
-	shopFolder.Parent = ReplicatedStorage
+	-- 중복 초기화 방지
+	if self._initialized then
+		return
+	end
+	self._initialized = true
+
+	-- RemoteFunction/Event 생성 (이미 있으면 재사용)
+	local shopFolder = ReplicatedStorage:FindFirstChild("ShopSystem")
+	if not shopFolder then
+		shopFolder = Instance.new("Folder")
+		shopFolder.Name = "ShopSystem"
+		shopFolder.Parent = ReplicatedStorage
+	end
 
 	-- 통 해금 요청
-	local unlockBarrelFunc = Instance.new("RemoteFunction")
-	unlockBarrelFunc.Name = "UnlockBarrel"
-	unlockBarrelFunc.Parent = shopFolder
+	local unlockBarrelFunc = shopFolder:FindFirstChild("UnlockBarrel")
+	if not unlockBarrelFunc then
+		unlockBarrelFunc = Instance.new("RemoteFunction")
+		unlockBarrelFunc.Name = "UnlockBarrel"
+		unlockBarrelFunc.Parent = shopFolder
+	end
 	unlockBarrelFunc.OnServerInvoke = function(player, barrelName)
 		return self:UnlockBarrel(player, barrelName)
 	end
 
 	-- 업그레이드 요청
-	local upgradeBarrelFunc = Instance.new("RemoteFunction")
-	upgradeBarrelFunc.Name = "UpgradeBarrel"
-	upgradeBarrelFunc.Parent = shopFolder
+	local upgradeBarrelFunc = shopFolder:FindFirstChild("UpgradeBarrel")
+	if not upgradeBarrelFunc then
+		upgradeBarrelFunc = Instance.new("RemoteFunction")
+		upgradeBarrelFunc.Name = "UpgradeBarrel"
+		upgradeBarrelFunc.Parent = shopFolder
+	end
 	upgradeBarrelFunc.OnServerInvoke = function(player, barrelName, upgradeType)
 		return self:UpgradeBarrel(player, barrelName, upgradeType)
 	end
 
 	-- 상점 데이터 요청
-	local getShopDataFunc = Instance.new("RemoteFunction")
-	getShopDataFunc.Name = "GetShopData"
-	getShopDataFunc.Parent = shopFolder
+	local getShopDataFunc = shopFolder:FindFirstChild("GetShopData")
+	if not getShopDataFunc then
+		getShopDataFunc = Instance.new("RemoteFunction")
+		getShopDataFunc.Name = "GetShopData"
+		getShopDataFunc.Parent = shopFolder
+	end
 	getShopDataFunc.OnServerInvoke = function(player)
 		return self:GetShopData(player)
 	end
 
 	-- 플레이어 샵 데이터 요청 (골드 포함)
-	local getPlayerShopDataFunc = Instance.new("RemoteFunction")
-	getPlayerShopDataFunc.Name = "GetPlayerShopData"
-	getPlayerShopDataFunc.Parent = shopFolder
+	local getPlayerShopDataFunc = shopFolder:FindFirstChild("GetPlayerShopData")
+	if not getPlayerShopDataFunc then
+		getPlayerShopDataFunc = Instance.new("RemoteFunction")
+		getPlayerShopDataFunc.Name = "GetPlayerShopData"
+		getPlayerShopDataFunc.Parent = shopFolder
+	end
 	getPlayerShopDataFunc.OnServerInvoke = function(player)
 		return self:GetPlayerShopData(player)
 	end
@@ -110,6 +155,28 @@ function ShopService:InitializePlayerShopData(player)
 				Cooldown = 0,
 				MaxShots = 0,
 			}
+		end
+	end
+end
+
+-- 특정 통의 ToolStatus 초기화
+function ShopService:InitializeBarrelToolStatus(player, barrelName)
+	local playerData = UserData.ReturnData(player)
+	if not playerData then return end
+
+	playerData.ToolStatus = playerData.ToolStatus or {}
+
+	local toolItemInfo = ItemDb.Tool[barrelName]
+	if toolItemInfo and not playerData.ToolStatus[barrelName] then
+		playerData.ToolStatus[barrelName] = {
+			ToolName = barrelName,
+			MaxShots = toolItemInfo.MaxShots,
+			ShotLeft = toolItemInfo.MaxShots,
+			Reloading = {},
+			ReloadTime = toolItemInfo.ReloadTime
+		}
+		for _ = 1, toolItemInfo.MaxShots do
+			table.insert(playerData.ToolStatus[barrelName].Reloading, false)
 		end
 	end
 end
@@ -143,6 +210,15 @@ function ShopService:UnlockBarrel(player, barrelName)
 	coins.Value = coins.Value - price
 	playerData.UnlockedBarrels = playerData.UnlockedBarrels or {}
 	playerData.UnlockedBarrels[barrelName] = true
+
+	-- ToolStatus 먼저 초기화 (클라이언트가 상태 요청하기 전에)
+	self:InitializeBarrelToolStatus(player, barrelName)
+
+	-- 인벤토리에 통 추가 (클라이언트에 이벤트 발생)
+	local barrelItemClass = getBarrelItemClasses()[barrelName]
+	if barrelItemClass then
+		getInventoryService():AddItem(player, barrelItemClass.new())
+	end
 
 	return { success = true, message = barrelName .. " 해금 완료!" }
 end
@@ -208,6 +284,8 @@ function ShopService:ApplyUpgradeToToolStatus(player, barrelName, upgradeType)
 		local baseMaxShots = ItemDb.Tool[barrelName].MaxShots
 		local newMaxShots = baseMaxShots + (level * config.bonusPerLevel)
 		toolStatus.MaxShots = newMaxShots
+		-- ShotLeft도 1 증가 (새 슬롯은 바로 사용 가능)
+		toolStatus.ShotLeft = toolStatus.ShotLeft + 1
 		-- Reloading 배열도 확장
 		while #toolStatus.Reloading < newMaxShots do
 			table.insert(toolStatus.Reloading, false)
@@ -215,6 +293,12 @@ function ShopService:ApplyUpgradeToToolStatus(player, barrelName, upgradeType)
 	elseif upgradeType == "Cooldown" then
 		local baseReloadTime = ItemDb.Tool[barrelName].ReloadTime
 		toolStatus.ReloadTime = math.max(0.5, baseReloadTime - (level * config.bonusPerLevel))
+	end
+
+	-- 클라이언트에 상태 업데이트 전송
+	local BarrelStatusUpdateEvent = ReplicatedStorage:FindFirstChild("BarrelStatusUpdateEvent")
+	if BarrelStatusUpdateEvent then
+		BarrelStatusUpdateEvent:FireClient(player, barrelName, nil, toolStatus.ShotLeft, false, toolStatus.ReloadTime)
 	end
 end
 

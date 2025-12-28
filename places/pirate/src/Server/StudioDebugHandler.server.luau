@@ -23,6 +23,7 @@ local debugEndGame = createDebugEvent("DebugEndGame")
 local debugRespawn = createDebugEvent("DebugRespawn")
 local debugSwitchTeam = createDebugEvent("DebugSwitchTeam")
 local debugShowStartAnim = createDebugEvent("DebugShowStartAnim")
+local debugAddGold = createDebugEvent("DebugAddGold")
 
 -- 게임 이벤트도 미리 생성 (MatchController보다 먼저 로드될 수 있음)
 if not ReplicatedStorage:FindFirstChild("GameStart") then
@@ -135,6 +136,30 @@ debugSwitchTeam.OnServerEvent:Connect(function(player)
 	else
 		player.Team = teamA
 		print("[StudioDebug] " .. player.Name .. " switched to TeamA")
+	end
+end)
+
+-- 골드 추가/차감
+debugAddGold.OnServerEvent:Connect(function(player, amount)
+	print("[StudioDebug] Add gold requested by " .. player.Name .. " - Amount: " .. tostring(amount))
+
+	local leaderstats = player:FindFirstChild("leaderstats")
+	if leaderstats then
+		local coins = leaderstats:FindFirstChild("Coins")
+		if coins then
+			if amount < 0 then
+				-- 음수면 초기화 (0으로)
+				coins.Value = 0
+				print("[StudioDebug] " .. player.Name .. " gold reset to 0")
+			else
+				coins.Value = coins.Value + amount
+				print("[StudioDebug] " .. player.Name .. " gold: " .. coins.Value)
+			end
+		else
+			print("[StudioDebug] Coins not found in leaderstats")
+		end
+	else
+		print("[StudioDebug] leaderstats not found for " .. player.Name)
 	end
 end)
 

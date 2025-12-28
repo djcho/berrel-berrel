@@ -198,15 +198,15 @@ function BarrelSystemService:HandleThrowingBarrel(player, toolName, mouseHitPosi
 
 	local barrel = nil
 	if toolName == "OilBarrel" then
-		barrel = OilBarrel.new(player, 1, effectiveToolInfo)
+		barrel = OilBarrel.new(player, effectiveToolInfo, 1)
 	elseif toolName == "FireBarrel" then
-		barrel = FireBarrel.new(player, 1, effectiveToolInfo)
+		barrel = FireBarrel.new(player, effectiveToolInfo, 1)
 	elseif toolName == "PoisonBarrel" then
-		barrel = PoisonBarrel.new(player, 1, effectiveToolInfo)
+		barrel = PoisonBarrel.new(player, effectiveToolInfo, 1)
 	elseif toolName == "WindBarrel" then
-		barrel = WindBarrel.new(player, 1, effectiveToolInfo)
+		barrel = WindBarrel.new(player, effectiveToolInfo, 1)
 	else
-		barrel = NormalBarrel.new(player, 1, effectiveToolInfo)
+		barrel = NormalBarrel.new(player, effectiveToolInfo, 1)
 	end
 
 	barrel:Throw(mouseHitPosition)

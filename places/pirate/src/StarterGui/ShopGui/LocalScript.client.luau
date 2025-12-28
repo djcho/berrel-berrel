@@ -308,6 +308,7 @@ local function createBarrelButton(barrelName, data)
 
 	-- 이름
 	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Name = "NameLabel"
 	nameLabel.Size = UDim2.new(1, -60, 0, 25)
 	nameLabel.Position = UDim2.new(0, 60, 0, 5)
 	nameLabel.BackgroundTransparency = 1
@@ -321,6 +322,7 @@ local function createBarrelButton(barrelName, data)
 
 	-- 상태
 	local statusLabel = Instance.new("TextLabel")
+	statusLabel.Name = "StatusLabel"
 	statusLabel.Size = UDim2.new(1, -60, 0, 20)
 	statusLabel.Position = UDim2.new(0, 60, 0, 30)
 	statusLabel.BackgroundTransparency = 1
@@ -337,17 +339,21 @@ local function createBarrelButton(barrelName, data)
 		selectBarrel(barrelName)
 	end)
 
-	-- 호버 효과
+	-- 호버 효과 (선택된 상태가 아닐 때만)
 	button.MouseEnter:Connect(function()
-		TweenService:Create(button, TweenInfo.new(0.15), {
-			BackgroundColor3 = COLORS.woodLight
-		}):Play()
+		if selectedBarrel ~= barrelName then
+			TweenService:Create(button, TweenInfo.new(0.15), {
+				BackgroundColor3 = COLORS.woodLight
+			}):Play()
+		end
 	end)
 
 	button.MouseLeave:Connect(function()
-		TweenService:Create(button, TweenInfo.new(0.15), {
-			BackgroundColor3 = data.isUnlocked and COLORS.woodDark or COLORS.locked
-		}):Play()
+		if selectedBarrel ~= barrelName then
+			TweenService:Create(button, TweenInfo.new(0.15), {
+				BackgroundColor3 = data.isUnlocked and COLORS.woodDark or COLORS.locked
+			}):Play()
+		end
 	end)
 
 	return button
@@ -486,12 +492,57 @@ local function updateUpgradeDisplay(barrelName)
 	end
 end
 
+-- 선택된 통 버튼 강조 업데이트
+local function updateBarrelButtonSelection()
+	for _, child in ipairs(barrelList:GetChildren()) do
+		if child:IsA("TextButton") then
+			local isSelected = child.Name == selectedBarrel
+			local data = shopData and shopData.barrels[child.Name]
+			local stroke = child:FindFirstChildOfClass("UIStroke")
+
+			if isSelected then
+				-- 선택된 통: 밝은 배경 + 두꺼운 골드 테두리
+				child.BackgroundColor3 = COLORS.gold
+				if stroke then
+					stroke.Color = COLORS.white
+					stroke.Thickness = 3
+				end
+				-- 텍스트 색상도 변경
+				for _, label in ipairs(child:GetChildren()) do
+					if label:IsA("TextLabel") and label.Name ~= "StatusLabel" then
+						label.TextColor3 = COLORS.black
+					end
+				end
+			else
+				-- 선택되지 않은 통: 원래 색상으로 복원
+				local isUnlocked = data and data.isUnlocked
+				child.BackgroundColor3 = isUnlocked and COLORS.woodDark or COLORS.locked
+				if stroke then
+					stroke.Color = isUnlocked and COLORS.gold or COLORS.locked
+					stroke.Thickness = 2
+				end
+				-- 텍스트 색상 복원
+				for _, label in ipairs(child:GetChildren()) do
+					if label:IsA("TextLabel") then
+						if label.Name == "NameLabel" then
+							label.TextColor3 = isUnlocked and COLORS.white or COLORS.locked
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
 -- 통 선택
 function selectBarrel(barrelName)
 	selectedBarrel = barrelName
 	local data = shopData.barrels[barrelName]
 
 	if not data then return end
+
+	-- 선택 상태 시각적 업데이트
+	updateBarrelButtonSelection()
 
 	selectedBarrelLabel.Text = data.displayName
 
@@ -560,6 +611,19 @@ local function openShop()
 	isOpen = true
 
 	refreshShopData()
+
+	-- 기본 통 선택 (selectedBarrel이 없으면 NormalBarrel 선택)
+	if not selectedBarrel and shopData and shopData.barrels then
+		if shopData.barrels["NormalBarrel"] then
+			selectBarrel("NormalBarrel")
+		else
+			-- NormalBarrel이 없으면 첫 번째 통 선택
+			for barrelName, _ in pairs(shopData.barrels) do
+				selectBarrel(barrelName)
+				break
+			end
+		end
+	end
 
 	overlay.Visible = true
 	mainFrame.Size = UDim2.new(0, 0, 0, 0)

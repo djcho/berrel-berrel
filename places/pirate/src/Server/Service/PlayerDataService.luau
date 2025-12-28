@@ -92,25 +92,44 @@ function PlayerDataService:OnCharacterAdded(character)
 		hasDiedOnce.Parent = player
 	end
 
-	-- 만약 HasDiedOnce가 true라면 더 이상 죽이지 않음
-	if player.HasDiedOnce.Value == true then
-		return
-	end
-
 	local humanoid = character:WaitForChild("Humanoid")
 	humanoid.NameOcclusion = Enum.NameOcclusion.NoOcclusion
 	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOn
 
-	local boolValue = Instance.new("BoolValue", humanoid)
-	boolValue.Name = "burnable"
-	boolValue.Value = true
+	-- burnable 값은 항상 설정
+	local existingBurnable = humanoid:FindFirstChild("burnable")
+	if not existingBurnable then
+		local boolValue = Instance.new("BoolValue", humanoid)
+		boolValue.Name = "burnable"
+		boolValue.Value = true
+	end
+
+	-- 만약 HasDiedOnce가 true라면 인벤토리 재구성 생략 (이미 있음)
+	if player.HasDiedOnce.Value == true then
+		return
+	end
 
 	InventoryService:ClearInventory(player)
-	InventoryService:AddItem(player, NormalBarrelItem.new())
-	InventoryService:AddItem(player, OilBarrelItem.new())
-	InventoryService:AddItem(player, FireBarrelItem.new())
-	InventoryService:AddItem(player, PoisonBarrelItem.new())
-	InventoryService:AddItem(player, WindBarrelItem.new())
+
+	-- 해금된 배럴만 인벤토리에 추가
+	local playerData = UserData.ReturnData(player)
+	local unlockedBarrels = playerData.UnlockedBarrels or { NormalBarrel = true }
+
+	if unlockedBarrels["NormalBarrel"] then
+		InventoryService:AddItem(player, NormalBarrelItem.new())
+	end
+	if unlockedBarrels["OilBarrel"] then
+		InventoryService:AddItem(player, OilBarrelItem.new())
+	end
+	if unlockedBarrels["FireBarrel"] then
+		InventoryService:AddItem(player, FireBarrelItem.new())
+	end
+	if unlockedBarrels["PoisonBarrel"] then
+		InventoryService:AddItem(player, PoisonBarrelItem.new())
+	end
+	if unlockedBarrels["WindBarrel"] then
+		InventoryService:AddItem(player, WindBarrelItem.new())
+	end
 
 	-- 배럴 상태 초기화
 	self:InitializeBarrelStatus(player)

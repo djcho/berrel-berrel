@@ -12,6 +12,12 @@ local Players = game:GetService("Players")
 local NPC_SPAWN_OFFSET = Vector3.new(0, 3, -8)  -- 스폰 위치 뒤쪽으로 8 스터드, 위로 3 스터드
 
 function ShopNpcService:Initialize()
+	-- 중복 초기화 방지
+	if self._initialized then
+		return
+	end
+	self._initialized = true
+
 	-- ShopSystem 폴더가 생성될 때까지 대기
 	local shopSystem = ReplicatedStorage:WaitForChild("ShopSystem", 10)
 	if not shopSystem then
@@ -19,10 +25,13 @@ function ShopNpcService:Initialize()
 		return
 	end
 
-	-- 상점 열기 이벤트 생성
-	local openShopEvent = Instance.new("RemoteEvent")
-	openShopEvent.Name = "OpenShopEvent"
-	openShopEvent.Parent = shopSystem
+	-- 이미 OpenShopEvent가 있으면 재사용
+	local openShopEvent = shopSystem:FindFirstChild("OpenShopEvent")
+	if not openShopEvent then
+		openShopEvent = Instance.new("RemoteEvent")
+		openShopEvent.Name = "OpenShopEvent"
+		openShopEvent.Parent = shopSystem
+	end
 
 	self.openShopEvent = openShopEvent
 

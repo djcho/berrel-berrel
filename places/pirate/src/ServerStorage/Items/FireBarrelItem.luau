@@ -1,55 +1,29 @@
-local BaseItem = require(script.Parent.BaseItem)
-local Equipable = require(script.Parent.Equipable)
+--[[
+	FireBarrelItem: 화염통 아이템
+	ToolItem을 상속하여 구현
+]]
 
-local ItemDbTools = require(script.Parent.Database.ItemDb).Tool
-local ItemInfo = ItemDbTools["FireBarrel"]
+local ToolItem = require(script.Parent.ToolItem)
 
-local FireBarrelItem = {}
+local FireBarrelItem = setmetatable({}, ToolItem)
 FireBarrelItem.__index = FireBarrelItem
-setmetatable(FireBarrelItem, BaseItem)
-
--- Inherit Equipable interface
-for k, v in pairs(Equipable) do
-	if FireBarrelItem[k] == nil then
-		FireBarrelItem[k] = v
-	end
-end
 
 function FireBarrelItem.new()
-	local self = BaseItem.new(ItemInfo.Id, ItemInfo.Category, ItemInfo.Name, ItemInfo.DisplayName, ItemInfo.IconId, ItemInfo.MaxStack)
-
-	self.Price = ItemInfo.Price
-	self.Damage = ItemInfo.Damage
-	self.DotDamage = ItemInfo.DotDamage
-	self.Cooldown = ItemInfo.Cooldown	
-	self.ThrowType = ItemInfo.ThrowType
-	self.MaxRange = ItemInfo.MaxRange
-	self.ChargingSpeed = ItemInfo.ChargingSpeed
-	self.ExplosionRadius = ItemInfo.ExplosionRadius
-	self.MaxShots = ItemInfo.MaxShots
-	self.ReloadTime = ItemInfo.ReloadTime
-	self.Model = ItemInfo.Model
-
+	local self = ToolItem.new("FireBarrel")
 	setmetatable(self, FireBarrelItem)
 	return self
 end
 
-function FireBarrelItem:Activate(player)
+function FireBarrelItem:Activate(_player)
+	-- FireBarrel 활성화 로직
 end
 
-function FireBarrelItem:Merge(player)
-	BaseItem:Merge(player)
+function FireBarrelItem:Equip(_player)
+	-- 화염통 장착 시 커스텀 로직
 end
 
--- Implement Equipable interface methods
-function FireBarrelItem:Equip(player)
-	print(player.Name .. " equipped the FireBarrel")
-	-- Add custom logic for equipping the item
-end
-
-function FireBarrelItem:Unequip(player)
-	print(player.Name .. " unequipped the FireBarrel")
-	-- Add custom logic for unequipping the item
+function FireBarrelItem:Unequip(_player)
+	-- 화염통 해제 시 커스텀 로직
 end
 
 return FireBarrelItem

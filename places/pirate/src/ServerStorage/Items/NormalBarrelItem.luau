@@ -1,50 +1,29 @@
-local BaseItem = require(script.Parent.BaseItem)
-local Equipable = require(script.Parent.Equipable)
+--[[
+	NormalBarrelItem: 기본통 아이템
+	ToolItem을 상속하여 구현
+]]
 
-local ItemDbTools = require(script.Parent.Database.ItemDb).Tool
-local ItemInfo = ItemDbTools["NormalBarrel"]
+local ToolItem = require(script.Parent.ToolItem)
 
-local NormalBarrelItem = setmetatable({}, BaseItem)
+local NormalBarrelItem = setmetatable({}, ToolItem)
 NormalBarrelItem.__index = NormalBarrelItem
 
--- Inherit Equipable interface
-for k, v in pairs(Equipable) do
-	if NormalBarrelItem[k] == nil then
-		NormalBarrelItem[k] = v
-	end
-end
-
 function NormalBarrelItem.new()
-	local self = setmetatable(BaseItem.new(ItemInfo.Id, ItemInfo.Category, ItemInfo.Name, ItemInfo.DisplayName, ItemInfo.IconId, ItemInfo.MaxStack), NormalBarrelItem)
-
-	self.Price = ItemInfo.Price
-	self.Damage = ItemInfo.Damage
-	self.DotDamage = ItemInfo.DotDamage
-	self.Cooldown = ItemInfo.Cooldown	
-	self.ThrowType = ItemInfo.ThrowType
-	self.MaxRange = ItemInfo.MaxRange
-	self.ChargingSpeed = ItemInfo.ChargingSpeed
-	self.ExplosionRadius = ItemInfo.ExplosionRadius
-	self.MaxShots = ItemInfo.MaxShots
-	self.ReloadTime = ItemInfo.ReloadTime
-	self.Model = ItemInfo.Model
-
+	local self = ToolItem.new("NormalBarrel")
+	setmetatable(self, NormalBarrelItem)
 	return self
 end
 
-function NormalBarrelItem:Activate(player)
-	print("NormalBarrelItem Activate")
+function NormalBarrelItem:Activate(_player)
+	-- NormalBarrel 활성화 로직
 end
 
--- Implement Equipable interface methods
-function NormalBarrelItem:Equip(player)
-	print(player.Name .. " equipped the NormalBarrel")
-	-- Add custom logic for equipping the item
+function NormalBarrelItem:Equip(_player)
+	-- 기본통 장착 시 커스텀 로직
 end
 
-function NormalBarrelItem:Unequip(player)
-	print(player.Name .. " unequipped the NormalBarrel")
-	-- Add custom logic for unequipping the item
+function NormalBarrelItem:Unequip(_player)
+	-- 기본통 해제 시 커스텀 로직
 end
 
 return NormalBarrelItem

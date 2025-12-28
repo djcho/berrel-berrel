@@ -151,6 +151,11 @@ local godBtn = createButton("무적 모드", COLORS.warning, 15)
 createSection("팀", 20)
 local switchBtn = createButton("팀 변경", COLORS.accent, 21)
 
+createSection("경제", 25)
+local addGold100Btn = createButton("+100 골드", COLORS.warning, 26)
+local addGold1000Btn = createButton("+1000 골드", COLORS.warning, 27)
+local resetGoldBtn = createButton("골드 초기화", COLORS.danger, 28)
+
 createSection("상태", 30)
 local statusLabel = Instance.new("TextLabel")
 statusLabel.Size = UDim2.new(1, 0, 0, 45)
@@ -240,6 +245,21 @@ end)
 switchBtn.MouseButton1Click:Connect(function()
 	local e = ReplicatedStorage:FindFirstChild("DebugSwitchTeam")
 	if e then e:FireServer() updateStatus("팀 변경됨") else updateStatus("이벤트 없음") end
+end)
+
+addGold100Btn.MouseButton1Click:Connect(function()
+	local e = ReplicatedStorage:FindFirstChild("DebugAddGold")
+	if e then e:FireServer(100) updateStatus("+100 골드") else updateStatus("이벤트 없음") end
+end)
+
+addGold1000Btn.MouseButton1Click:Connect(function()
+	local e = ReplicatedStorage:FindFirstChild("DebugAddGold")
+	if e then e:FireServer(1000) updateStatus("+1000 골드") else updateStatus("이벤트 없음") end
+end)
+
+resetGoldBtn.MouseButton1Click:Connect(function()
+	local e = ReplicatedStorage:FindFirstChild("DebugAddGold")
+	if e then e:FireServer(-999999) updateStatus("골드 초기화") else updateStatus("이벤트 없음") end
 end)
 
 updateStatus("준비됨")
