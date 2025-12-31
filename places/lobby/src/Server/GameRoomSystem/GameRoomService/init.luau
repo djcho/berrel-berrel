@@ -251,8 +251,9 @@ end
 -- @param roomId 게임방 ID
 -- @param playerName 플레이어 이름
 -- @param customTeleportService 커스텀 텔레포트 서비스 인스턴스
+-- @param trailShopService (optional) Trail 상점 서비스 인스턴스
 -- @return 성공 여부와 메시지
-function GameRoomService:JoinGameRoom(roomId, playerName, customTeleportService)
+function GameRoomService:JoinGameRoom(roomId, playerName, customTeleportService, trailShopService)
 	assert(roomId, "Room ID는 필수입니다.")
 	assert(playerName, "Player는 필수입니다.")
 	assert(customTeleportService, "CustomTeleportService 인스턴스는 필수입니다.")
@@ -268,8 +269,8 @@ function GameRoomService:JoinGameRoom(roomId, playerName, customTeleportService)
 
 	room:AddPlayer(playerName)
 	self:SaveGameRoomToDataStore(room)
-	
-	room:JoinPlayer(customTeleportService, playerName);
+
+	room:JoinPlayer(customTeleportService, playerName, trailShopService)
 
 	return true, "게임방에 성공적으로 참가했습니다."
 end

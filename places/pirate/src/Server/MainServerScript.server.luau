@@ -13,12 +13,14 @@ local BarrelSystemService = require(game.ServerScriptService.Service.BarrelSyste
 local TeamService = require(game.ServerScriptService.Service.TeamService)
 local ShopService = require(game.ServerScriptService.Service.ShopService)
 local ShopNpcService = require(game.ServerScriptService.Service.ShopNpcService)
+local TrailDataService = require(game.ServerScriptService.Service.TrailDataService)
 
 -- 서비스 초기화
 TeamService:Initialize()
 MatchController:Initialize()
 ShopService:Initialize()
 ShopNpcService:Initialize()
+TrailDataService:Initialize()
 
 -- 익사 데미지 RemoteEvent 생성 및 처리
 local drowningEvent = Instance.new("RemoteEvent")

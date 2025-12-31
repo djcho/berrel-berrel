@@ -30,13 +30,20 @@ function GameRoom:GetPlayerNames()
 	return self.players
 end
 
-function GameRoom:JoinPlayer(customTeleportService, playerName)
+function GameRoom:JoinPlayer(customTeleportService, playerName, trailShopService)
 	local player = game.Players:FindFirstChild(playerName)
 	if player then
+		-- Trail 데이터 가져오기
+		local trailData = nil
+		if trailShopService then
+			trailData = trailShopService:GetTeleportTrailData(player)
+		end
+
 		local teleportData = {
 			roomId = self.id,
 			serverId = self.serverId,
-			placeId = self.placeId
+			placeId = self.placeId,
+			trailData = trailData, -- Trail 장착 정보 포함
 		}
 		customTeleportService:TeleportPlayer(player, self.placeId, teleportData)
 	else

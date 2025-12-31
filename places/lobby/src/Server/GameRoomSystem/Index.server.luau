@@ -2,9 +2,14 @@ local replicatedStorage = game:GetService("ReplicatedStorage")
 local runService = game:GetService("RunService")
 local MessagingService = game:GetService("MessagingService")
 local HttpService = game:GetService("HttpService")
+local ServerScriptService = game:GetService("ServerScriptService")
 local isStudio = runService:IsStudio()
-local gameRoomService = require(game:GetService("ServerScriptService"):WaitForChild("GameRoomSystem"):WaitForChild("GameRoomService")).new()
-local customTeleportService = require(game:GetService("ServerScriptService"):WaitForChild("CustomTeleportService")).new()
+local gameRoomService = require(ServerScriptService:WaitForChild("GameRoomSystem"):WaitForChild("GameRoomService")).new()
+local customTeleportService = require(ServerScriptService:WaitForChild("CustomTeleportService")).new()
+local trailShopService = require(ServerScriptService:WaitForChild("Service"):WaitForChild("TrailShopService")).getInstance()
+
+-- TrailShopService 초기화
+trailShopService:Initialize()
 
 -- 설정
 local PIRATE_PLACE_ID = 18517272973
@@ -214,7 +219,7 @@ local function handleQuickJoin(player)
 	})
 
 	-- 게임방 입장 처리
-	local success, message = gameRoomService:JoinGameRoom(targetRoom.id, player.Name, customTeleportService)
+	local success, message = gameRoomService:JoinGameRoom(targetRoom.id, player.Name, customTeleportService, trailShopService)
 
 	if success then
 		-- 입장 성공
@@ -313,7 +318,7 @@ replicatedStorage.JoinGameRoom.OnServerEvent:Connect(function(player, roomId)
 	end
 
 	-- 게임방 입장 처리
-	local success, message = gameRoomService:JoinGameRoom(roomId, player.Name, customTeleportService)
+	local success, message = gameRoomService:JoinGameRoom(roomId, player.Name, customTeleportService, trailShopService)
 	if success then
 		checkAutoScaling()
 		replicatedStorage.UpdateGameList:FireAllClients(gameRoomService:GetAllGameRooms())

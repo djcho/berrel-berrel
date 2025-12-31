@@ -16,6 +16,20 @@ local LoudSpeaker = require(ServerStorage.Scripts.LoudSpeaker)
 local CommonUtil = require(ServerStorage.Scripts.CommonUtil)
 local ItemDb = require(ServerStorage.Items.Database.ItemDb)
 
+-- TrailDataService 지연 로딩 (순환 참조 방지)
+local TrailDataService = nil
+local function getTrailDataService()
+	if not TrailDataService then
+		local success, result = pcall(function()
+			return require(game:GetService("ServerScriptService"):WaitForChild("Service"):WaitForChild("TrailDataService"))
+		end)
+		if success then
+			TrailDataService = result
+		end
+	end
+	return TrailDataService
+end
+
 -- BaseBarrel 클래스 정의
 local BaseBarrel = {}
 BaseBarrel.__index = BaseBarrel
@@ -44,7 +58,15 @@ function BaseBarrel.new(player, toolInfo, level)
 		self.FallbackPartName = itemConfig.FallbackPartName
 		self.ExplodeEffects = itemConfig.ExplodeEffects or {}
 		self.ExplodeSound = itemConfig.ExplodeSound
-		self.TrailParticle = itemConfig.TrailParticle
+
+		-- 커스텀 Trail 적용 (TrailDataService에서 플레이어별 장착된 Trail 조회)
+		local trailService = getTrailDataService()
+		if trailService then
+			self.TrailParticle = trailService:GetEquippedTrail(player, toolInfo.Name)
+		else
+			-- TrailDataService가 아직 초기화되지 않은 경우 기본값 사용
+			self.TrailParticle = itemConfig.TrailParticle
+		end
 	end
 
 	-- 파트 생성 (PartName 사용)
@@ -68,37 +90,42 @@ function BaseBarrel.new(player, toolInfo, level)
 		self.BarrelPart.Parent = workspace
 		self.BarrelPart:SetNetworkOwner(nil)
 
-		-- 잔상 효과 추가 (TrailParticle 설정이 있으면)
-		-- 경로: ServerStorage/Trail/[TrailParticle]
+		-- 잔상 효과 추가 (TrailDataService 사용)
+		-- AssetId가 있으면 InsertService로 로드, 없으면 ServerStorage fallback
 		if self.TrailParticle then
-			local trailFolder = ServerStorage:FindFirstChild("Trail")
-			if trailFolder then
-				local trailTemplate = trailFolder:FindFirstChild(self.TrailParticle)
-				if trailTemplate then
-					if trailTemplate:IsA("Trail") then
-						-- Trail 객체인 경우: 두 개의 Attachment 필요
-						local attachment0 = Instance.new("Attachment")
-						attachment0.Name = "TrailAttachment0"
-						attachment0.Position = Vector3.new(0, 0.5, 0)
-						attachment0.Parent = self.BarrelPart
+			local trailService = getTrailDataService()
+			if trailService then
+				-- TrailDataService에서 에셋 로드 및 적용 (AssetId 또는 ServerStorage)
+				trailService:ApplyTrailToBarrel(self.BarrelPart, self.TrailParticle)
+			else
+				-- TrailDataService 없으면 기존 방식 (ServerStorage에서 직접 로드)
+				local trailFolder = ServerStorage:FindFirstChild("Trail")
+				if trailFolder then
+					local trailTemplate = trailFolder:FindFirstChild(self.TrailParticle)
+					if trailTemplate then
+						if trailTemplate:IsA("Trail") then
+							local attachment0 = Instance.new("Attachment")
+							attachment0.Name = "TrailAttachment0"
+							attachment0.Position = Vector3.new(0, 0.5, 0)
+							attachment0.Parent = self.BarrelPart
 
-						local attachment1 = Instance.new("Attachment")
-						attachment1.Name = "TrailAttachment1"
-						attachment1.Position = Vector3.new(0, -0.5, 0)
-						attachment1.Parent = self.BarrelPart
+							local attachment1 = Instance.new("Attachment")
+							attachment1.Name = "TrailAttachment1"
+							attachment1.Position = Vector3.new(0, -0.5, 0)
+							attachment1.Parent = self.BarrelPart
 
-						local trail = trailTemplate:Clone()
-						trail.Attachment0 = attachment0
-						trail.Attachment1 = attachment1
-						trail.Parent = self.BarrelPart
-					elseif trailTemplate:IsA("ParticleEmitter") then
-						-- ParticleEmitter인 경우: Attachment 하나에 붙임
-						local attachment = Instance.new("Attachment")
-						attachment.Name = "TrailAttachment"
-						attachment.Parent = self.BarrelPart
+							local trail = trailTemplate:Clone()
+							trail.Attachment0 = attachment0
+							trail.Attachment1 = attachment1
+							trail.Parent = self.BarrelPart
+						elseif trailTemplate:IsA("ParticleEmitter") then
+							local attachment = Instance.new("Attachment")
+							attachment.Name = "TrailAttachment"
+							attachment.Parent = self.BarrelPart
 
-						local trail = trailTemplate:Clone()
-						trail.Parent = attachment
+							local trail = trailTemplate:Clone()
+							trail.Parent = attachment
+						end
 					end
 				end
 			end
