@@ -17,6 +17,15 @@ local WIND_BOOST_RADIUS = 18  -- 바람 부스트 시 확산 반경
 
 local burningEndFlag = false
 
+-- 기름 모델의 밀도 가져오기 (토네이도에 빨리면 감소)
+local function getFireDensity()
+	local oilModel = script.Parent and script.Parent.Parent
+	if oilModel and oilModel:IsA("Model") and oilModel.Name:match("Oil") then
+		return (oilModel:GetAttribute("FireDensity") or 100) / 100
+	end
+	return 1
+end
+
 -- 바람 부스트 확인 함수
 local function getSpreadRadius()
 	if script:GetAttribute("WindBoosted") then
@@ -25,8 +34,8 @@ local function getSpreadRadius()
 	return BASE_SPREAD_RADIUS
 end
 
--- 불 확산 대상에 스크립트를 추가하는 헬퍼 함수
-local function attachFireToTarget(targetPart)
+-- 불 확산 대상에 스크립트를 추가하는 헬퍼 함수 (오브젝트용)
+local function attachFireToObject(targetPart)
 	local newScript = script:Clone()
 	newScript.Parent = targetPart
 	newScript.Disabled = false
@@ -36,6 +45,17 @@ local function attachFireToTarget(targetPart)
 	if modelDestroyer and modelDestroyer.Configuration and modelDestroyer.Configuration.WaitTime then
 		modelDestroyer.Configuration.WaitTime.Value = 10 -- 사라지는 시간을 10초로 초기화
 	end
+end
+
+-- 캐릭터에 불 스크립트 복제
+local function attachFireToCharacter(character, targetPart)
+	-- 이미 불이 붙어있으면 스킵
+	if character:FindFirstChild("FireSpread", true) then
+		return
+	end
+
+	local newScript = script:Clone()
+	newScript.Parent = targetPart
 end
 
 local function Burning()
@@ -49,12 +69,12 @@ local function Burning()
 
 		for _, SpreadPart in partsInRadius do
 			if CommonUtil:IsPartIncludedCharacter(SpreadPart) then
-				if not SpreadPart.Parent:FindFirstChild("FireSpread", true) then
-					attachFireToTarget(SpreadPart)
-				end
+				local character = SpreadPart.Parent
+				-- 캐릭터에 불 스크립트 복제 (이미 있으면 스킵됨)
+				attachFireToCharacter(character, SpreadPart)
 			elseif SpreadPart:FindFirstChild("burnable") then
 				if not SpreadPart:FindFirstChild("FireSpread") then
-					attachFireToTarget(SpreadPart)
+					attachFireToObject(SpreadPart)
 				end
 			end
 		end
@@ -94,23 +114,6 @@ local function setCreatorTag(humanoid, targetPlayer)
 	game.Debris:AddItem(creator, 5)
 end
 
-local function TakeDotDamage(humanoid, tickDamage, targetPlayer)
-	if not humanoid then
-		return
-	end
-
-	if tickDamage == nil or tickDamage <= 0 then
-		tickDamage = 3
-	end
-
-	for _ = 1, 3 do
-		-- 매 데미지마다 creator 태그 갱신 (같은 팀이면 무시)
-		setCreatorTag(humanoid, targetPlayer)
-		humanoid:TakeDamage(tickDamage)
-		task.wait(1)
-	end
-end
-
 local fire = Instance.new("Fire", script.Parent)
 local smoke = Instance.new("Smoke", script.Parent)
 smoke.Color = Color3.new(0, 0, 0)
@@ -133,16 +136,93 @@ end
 
 task.wait(0.15)
 
+-- 캐릭터에 붙은 불인 경우: 3초 후 자동 소멸
+if CommonUtil:IsPartIncludedCharacter(script.Parent) then
+	task.spawn(Burning)
+
+	task.wait(3)  -- 캐릭터 불은 3초간 지속
+	burningEndFlag = true
+	fire:Destroy()
+	smoke:Destroy()
+	script:Destroy()
+	return
+end
+
 task.spawn(Burning)
 
 if script.Parent.Parent.Name:match("Oil") then
+	local oilModel = script.Parent.Parent
+
 	-- 사라지는 시간을 초기화하는 처리 추가
-	local modelDestroyer = script.Parent.Parent:FindFirstChild("ModelDestroyer")
+	local modelDestroyer = oilModel:FindFirstChild("ModelDestroyer")
 	if modelDestroyer and modelDestroyer.Configuration and modelDestroyer.Configuration.WaitTime then
 		modelDestroyer.Configuration.WaitTime.Value = 10 -- 사라지는 시간을 10초로 초기화
 	end
 
+	-- 이 파츠가 데미지 담당인지 확인 (기름 모델당 하나만)
+	local isDamageDealer = false
+	if not oilModel:GetAttribute("FireDamageActive") then
+		oilModel:SetAttribute("FireDamageActive", true)
+		isDamageDealer = true
+	end
+
+	-- 데미지 담당 파츠만 범위 내 캐릭터에게 DoT 데미지
+	if isDamageDealer then
+		task.spawn(function()
+			local ItemDbTools = require(ServerStorage.Items.Database.ItemDb).Tool
+			local ItemInfo = ItemDbTools["FireBarrel"]
+			local tickDamage = ItemInfo.DotDamage or 5
+
+			while not burningEndFlag do
+				local processedCharacters = {}
+				local spreadRadius = getSpreadRadius()
+
+				-- 기름 모델의 모든 파츠에서 범위 체크
+				for _, oilPart in oilModel:GetChildren() do
+					if oilPart:IsA("BasePart") then
+						local overlapParams = OverlapParams.new()
+						overlapParams.FilterType = Enum.RaycastFilterType.Exclude
+						overlapParams.FilterDescendantsInstances = {oilModel}
+
+						local partsInRadius = workspace:GetPartBoundsInRadius(oilPart.Position, spreadRadius, overlapParams)
+
+						for _, part in partsInRadius do
+							if CommonUtil:IsPartIncludedCharacter(part) then
+								local character = part.Parent
+								if not processedCharacters[character] then
+									processedCharacters[character] = true
+									local humanoid = character:FindFirstChild("Humanoid")
+									local targetPlayer = Players:GetPlayerFromCharacter(character)
+
+									if humanoid and humanoid.Health > 0 then
+										-- 같은 팀이면 스킵 (자기 자신은 데미지 받음)
+										local isSelf = targetPlayer == fireStarter
+										local isSameTeam = isSameTeamAsFireStarter(targetPlayer)
+										if isSelf or not isSameTeam then
+											-- 밀도에 비례한 데미지
+											local density = getFireDensity()
+											local actualDamage = math.floor(tickDamage * density)
+											if actualDamage > 0 then
+												if not isSelf then
+													setCreatorTag(humanoid, targetPlayer)
+												end
+												humanoid:TakeDamage(actualDamage)
+											end
+										end
+									end
+								end
+							end
+						end
+					end
+				end
+
+				task.wait(1)  -- 1초마다 데미지
+			end
+		end)
+	end
+
 	task.wait(10)
+	burningEndFlag = true
 	fire:Destroy()
 	smoke:Destroy()
 
@@ -152,30 +232,15 @@ if script.Parent.Parent.Name:match("Oil") then
 	local Debris = game:GetService("Debris")
 
 	local oilPartCount = 0
-	for _, v in pairs(script.Parent.Parent:GetChildren()) do
+	for _, v in pairs(oilModel:GetChildren()) do
 		if v.Name == "OilPart" then
 			oilPartCount += 1
 		end
 	end
 
 	if oilPartCount == 1 then
-		Debris:AddItem(script.Parent.Parent, 0.2)
+		Debris:AddItem(oilModel, 0.2)
 	else
 		script.Parent:Destroy()
 	end
-	burningEndFlag = true
-elseif CommonUtil:IsPartIncludedCharacter(script.Parent) then
-	local humanoid = CommonUtil:GetHumanoidByPart(script.Parent)
-	local targetPlayer = CommonUtil:GetPlayerByPart(script.Parent)
-	task.spawn(function()
-		local ItemDbTools = require(ServerStorage.Items.Database.ItemDb).Tool
-		local ItemInfo = ItemDbTools["FireBarrel"]
-		TakeDotDamage(humanoid, ItemInfo.DotDamage, targetPlayer)
-	end)
-	task.wait(4)
-	burningEndFlag = true
-	fire:Destroy()
-	smoke:Destroy()
-	script:Destroy()
-	return
 end

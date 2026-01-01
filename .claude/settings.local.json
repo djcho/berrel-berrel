@@ -20,7 +20,10 @@
       "Bash(del \"c:\\\\Users\\\\djcho\\\\Development\\\\berrel-berrel\\\\places\\\\pirate\\\\src\\\\StarterGui\\\\MatchStatusGui\\\\LocalScript.client copy.luau\")",
       "Bash(git commit:*)",
       "Bash(git -C \"c:\\\\Users\\\\djcho\\\\Development\\\\berrel-berrel\" status --short)",
-      "Bash(git -C \"c:\\\\Users\\\\djcho\\\\Development\\\\berrel-berrel\" checkout -- \"places/pirate/src/StarterGui/MatchStatusGui/LocalScript.client.luau\")"
+      "Bash(git -C \"c:\\\\Users\\\\djcho\\\\Development\\\\berrel-berrel\" checkout -- \"places/pirate/src/StarterGui/MatchStatusGui/LocalScript.client.luau\")",
+      "Bash(git checkout:*)",
+      "Bash(selene:*)",
+      "Bash(selene.exe:*)"
     ]
   }
 }

@@ -6,7 +6,11 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local isStudio = runService:IsStudio()
 local gameRoomService = require(ServerScriptService:WaitForChild("GameRoomSystem"):WaitForChild("GameRoomService")).new()
 local customTeleportService = require(ServerScriptService:WaitForChild("CustomTeleportService")).new()
+local coinService = require(ServerScriptService:WaitForChild("Service"):WaitForChild("CoinService")).getInstance()
 local trailShopService = require(ServerScriptService:WaitForChild("Service"):WaitForChild("TrailShopService")).getInstance()
+
+-- CoinService 초기화
+coinService:Initialize()
 
 -- TrailShopService 초기화
 trailShopService:Initialize()
@@ -17,6 +21,7 @@ local MAX_PLAYERS_PER_ROOM = 16
 local LOCK_KEY = "GameRoomCleanupLock"
 local LOCK_TIMEOUT = 40
 local MATCH_STATUS_TOPIC = "MatchStatus"
+local COIN_REWARD_TOPIC = "CoinReward"
 
 -- 실시간 게임 상태 캐시 (roomId -> status)
 local liveMatchStatus = {}
@@ -55,7 +60,28 @@ if not isStudio then
 				replicatedStorage.LiveMatchUpdate:FireAllClients(data)
 			end
 		end)
-		print("[Lobby] MessagingService 구독 완료")
+		print("[Lobby] MatchStatus 구독 완료")
+	end)
+
+	-- 코인 보상 수신 구독
+	pcall(function()
+		MessagingService:SubscribeAsync(COIN_REWARD_TOPIC, function(message)
+			local success, data = pcall(function()
+				return HttpService:JSONDecode(message.Data)
+			end)
+
+			if success and data and data.rewards then
+				print("[Lobby] 코인 보상 수신:", data.roomId)
+				for _, reward in ipairs(data.rewards) do
+					local userId = reward.odIresU -- UserId
+					local coins = reward.coins or 0
+					if userId and coins > 0 then
+						coinService:AddCoinsByUserId(userId, coins)
+					end
+				end
+			end
+		end)
+		print("[Lobby] CoinReward 구독 완료")
 	end)
 end
 

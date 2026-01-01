@@ -68,24 +68,37 @@ end
 
 -- 화염 폭풍 효과 (바람 + 불 조합)
 function WindBarrel:CreateFireStorm(fireModel, explosionOrigin)
-	-- 화염 폭풍: 불 확산 범위 2배, 대미지 1.5배
+	-- 화염 폭풍: 불 확산 범위 3배, 대미지 2배, 크기 4배
 	for _, part in fireModel:GetDescendants() do
 		if part.Name == "FireSpread" or part.Name == "ToxicFireSpread" then
 			part:SetAttribute("WindBoosted", true)
 			part:SetAttribute("FireStorm", true)
 
-			-- 불꽃 크기 증가
+			-- 불꽃 크기 대폭 증가
 			local fire = part.Parent:FindFirstChildWhichIsA("Fire")
 			if fire then
-				fire.Size = fire.Size * 2
-				fire.Heat = fire.Heat * 1.5
+				fire.Size = fire.Size * 4
+				fire.Heat = fire.Heat * 3
+			end
+
+			-- 연기도 증가
+			local smoke = part.Parent:FindFirstChildWhichIsA("Smoke")
+			if smoke then
+				smoke.Size = smoke.Size * 3
+				smoke.Opacity = math.min(1, smoke.Opacity * 2)
 			end
 		end
 	end
 
+	-- FireDensity 증가 (화염 폭풍으로 불이 강해짐)
+	if fireModel:IsA("Model") then
+		local currentDensity = fireModel:GetAttribute("FireDensity") or 100
+		fireModel:SetAttribute("FireDensity", math.min(200, currentDensity + 100))  -- 밀도 2배까지 증가
+	end
+
 	-- 주변 적에게 화염 데미지
-	local fireStormRadius = 18
-	local fireStormDamage = 20
+	local fireStormRadius = 25
+	local fireStormDamage = 35
 
 	local overlapParams = OverlapParams.new()
 	overlapParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -288,6 +301,10 @@ function WindBarrel:CreateTornado(position)
 	local rotationSpeed = 360  -- 초당 360도 회전
 	local tickCount = 0
 
+	-- 토네이도에 빨려들어가는 오브젝트들 추적 (지속적으로 당기기 위해)
+	local pulledObjects = {}  -- {object = true}
+	local pulledPoisonClouds = {}  -- {model = {originalAccelerations}}
+
 	task.spawn(function()
 		while tick() - startTime < tornadoDuration do
 			if not tornadoPart or not tornadoPart.Parent then break end
@@ -373,79 +390,9 @@ function WindBarrel:CreateTornado(position)
 						continue
 					end
 
-					-- 기름인지 확인
+					-- 기름인지 확인 (기름불 처리는 아래 별도 루프에서 처리)
 					local isOil = parentName:match("Oil") or part.Name:match("Oil")
-
-					-- 기름에 붙은 Fire 이펙트는 작은 불들로 분리해서 토네이도로 빨아들임
 					if isOil then
-						local fireEffect = part:FindFirstChildWhichIsA("Fire")
-
-						if fireEffect and not processedObjects[fireEffect] then
-							processedObjects[fireEffect] = true
-
-							-- 작은 불 파편 여러 개 생성 (3~5개)
-							local fireCount = math.random(3, 5)
-							for _ = 1, fireCount do
-								local firePart = Instance.new("Part")
-								firePart.Name = "TornadoFire"
-								firePart.Size = Vector3.new(0.5, 0.5, 0.5)
-								-- 랜덤 오프셋으로 흩어지게
-								local randomOffset = Vector3.new(
-									math.random(-3, 3),
-									math.random(0, 2),
-									math.random(-3, 3)
-								)
-								firePart.Position = part.Position + randomOffset
-								firePart.Anchored = false
-								firePart.CanCollide = false
-								firePart.CanQuery = false
-								firePart.Transparency = 1
-								firePart.Parent = workspace
-
-								-- 작은 불 이펙트 복제
-								local newFire = Instance.new("Fire")
-								newFire.Size = fireEffect.Size * 0.4
-								newFire.Heat = fireEffect.Heat * 0.5
-								newFire.Color = fireEffect.Color
-								newFire.SecondaryColor = fireEffect.SecondaryColor
-								newFire.Parent = firePart
-
-								-- 토네이도 중심으로 빨려들어가기 (토네이도가 사라질 때까지)
-								task.spawn(function()
-									while firePart and firePart.Parent do
-										-- 토네이도가 사라지면 불도 사라짐
-										if not tornadoPart or not tornadoPart.Parent then
-											if firePart and firePart.Parent then
-												firePart:Destroy()
-											end
-											break
-										end
-
-										local toCenter = (tornadoPart.Position - firePart.Position)
-										local dist = toCenter.Magnitude
-										local pullStr = math.clamp((tornadoRadius * 2 - dist) / (tornadoRadius * 2), 0.3, 1)
-										local tangent = Vector3.new(-toCenter.Z, 0, toCenter.X).Unit
-										local inward = toCenter.Unit
-
-										-- BodyVelocity로 부드럽게 이동
-										local existingBV = firePart:FindFirstChild("FireVelocity")
-										if existingBV then existingBV:Destroy() end
-
-										local bv = Instance.new("BodyVelocity")
-										bv.Name = "FireVelocity"
-										bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-										bv.Velocity = tangent * 20 + inward * (25 * pullStr) + Vector3.new(0, 10 * pullStr, 0)
-										bv.Parent = firePart
-										game.Debris:AddItem(bv, 0.1)
-
-										task.wait(0.08)
-									end
-								end)
-							end
-
-							-- 원래 Fire 크기 줄이기 (일부만 남김)
-							fireEffect.Size = fireEffect.Size * 0.3
-						end
 						continue  -- 기름 파트 자체는 이동하지 않음
 					end
 
@@ -499,18 +446,160 @@ function WindBarrel:CreateTornado(position)
 							local newDensity = math.max(0, currentDensity - densityDrain)
 							child:SetAttribute("Density", newDensity)
 
-							-- 독구름의 모든 파츠를 토네이도 중심으로 이동 (한번만)
+							-- 독구름의 모든 파츠를 토네이도 중심으로 이동
 							if not processedObjects[child] then
 								processedObjects[child] = true
-								for _, part in child:GetDescendants() do
-									if part:IsA("BasePart") then
-										local toCenter = (tornadoPart.Position - part.Position)
-										local tangent = Vector3.new(-toCenter.Z, 0, toCenter.X).Unit
-										local inward = toCenter.Unit
 
-										local targetPos = part.Position + tangent * 2 + inward * 1.5
-										TweenService:Create(part, TweenInfo.new(0.1), {Position = targetPos}):Play()
+								-- 파티클 Acceleration을 토네이도 중심 방향으로 설정 (빨려들어가는 효과)
+								if not pulledPoisonClouds[child] then
+									pulledPoisonClouds[child] = {}
+									for _, part in child:GetDescendants() do
+										if part:IsA("ParticleEmitter") then
+											-- 원본 Acceleration 저장
+											pulledPoisonClouds[child][part] = part.Acceleration
+											-- 토네이도 중심 방향으로 빨려들어가도록 설정
+											local toCenter = (tornadoPart.Position - primaryPart.Position).Unit
+											part.Acceleration = toCenter * 30 + Vector3.new(0, 20, 0)  -- 위로 빨려 올라감
+											part.Speed = NumberRange.new(part.Speed.Min * 0.5, part.Speed.Max * 0.5)  -- 속도 줄임
+											part.Drag = 2  -- 드래그 추가
+										end
 									end
+								end
+							end
+
+							-- 독구름 파츠를 토네이도 중심으로 계속 이동
+							for _, part in child:GetDescendants() do
+								if part:IsA("BasePart") then
+									local toCenter = (tornadoPart.Position - part.Position)
+									local tangent = Vector3.new(-toCenter.Z, 0, toCenter.X).Unit
+									local inward = toCenter.Unit
+
+									local targetPos = part.Position + tangent * 3 + inward * 2 + Vector3.new(0, 0.5, 0)
+									TweenService:Create(part, TweenInfo.new(0.08), {Position = targetPos}):Play()
+								end
+							end
+						end
+					end
+				end
+			end
+
+			-- 기름불 모델 검색 (Oil 모델에 Fire가 붙어있는 경우)
+			for _, child in workspace:GetChildren() do
+				if child:IsA("Model") and child.Name:match("Oil") then
+					local hasFire = false
+					local fireParts = {}
+
+					for _, part in child:GetDescendants() do
+						if part:IsA("Fire") then
+							hasFire = true
+							table.insert(fireParts, part)
+						end
+					end
+
+					if hasFire then
+						local primaryPart = child.PrimaryPart or child:FindFirstChildWhichIsA("BasePart")
+						if primaryPart then
+							local distance = (primaryPart.Position - tornadoPart.Position).Magnitude
+							if distance < tornadoRadius * 2 then
+								-- 기름불이 처음 발견되면 불 파편 생성
+								if not pulledObjects[child] then
+									pulledObjects[child] = true
+
+									-- 불 파편을 연속적으로 생성하는 스레드 시작
+									task.spawn(function()
+										while tornadoPart and tornadoPart.Parent and child and child.Parent do
+											-- 각 Fire에서 불 파편 생성
+											for _, fireEffect in fireParts do
+												if fireEffect and fireEffect.Parent then
+													local parentPart = fireEffect.Parent
+													if parentPart:IsA("BasePart") then
+														-- 작은 불 파편 생성
+														local firePart = Instance.new("Part")
+														firePart.Name = "TornadoFire"
+														firePart.Size = Vector3.new(0.3, 0.3, 0.3)
+														firePart.Position = parentPart.Position + Vector3.new(
+															math.random(-2, 2),
+															math.random(0, 1),
+															math.random(-2, 2)
+														)
+														firePart.Anchored = false
+														firePart.CanCollide = false
+														firePart.CanQuery = false
+														firePart.Transparency = 1
+														firePart.Parent = workspace
+
+														-- 작은 불 이펙트
+														local newFire = Instance.new("Fire")
+														newFire.Size = fireEffect.Size * 0.3
+														newFire.Heat = 0
+														newFire.Color = fireEffect.Color
+														newFire.SecondaryColor = fireEffect.SecondaryColor
+														newFire.Parent = firePart
+
+														-- 토네이도로 빨려들어가기
+														task.spawn(function()
+															local fireStartTime = tick()
+															while firePart and firePart.Parent and tick() - fireStartTime < 2 do
+																if not tornadoPart or not tornadoPart.Parent then
+																	if firePart and firePart.Parent then
+																		firePart:Destroy()
+																	end
+																	break
+																end
+
+																local toCenter = (tornadoPart.Position - firePart.Position)
+																local dist = toCenter.Magnitude
+																local pullStr = math.clamp((tornadoRadius * 2 - dist) / (tornadoRadius * 2), 0.3, 1)
+																local tangent = Vector3.new(-toCenter.Z, 0, toCenter.X).Unit
+																local inward = toCenter.Unit
+
+																local existingBV = firePart:FindFirstChild("FireVelocity")
+																if existingBV then existingBV:Destroy() end
+
+																local bv = Instance.new("BodyVelocity")
+																bv.Name = "FireVelocity"
+																bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+																bv.Velocity = tangent * 15 + inward * (20 * pullStr) + Vector3.new(0, 15 * pullStr, 0)
+																bv.Parent = firePart
+																game.Debris:AddItem(bv, 0.08)
+
+																task.wait(0.06)
+															end
+
+															if firePart and firePart.Parent then
+																firePart:Destroy()
+															end
+														end)
+													end
+												end
+											end
+											task.wait(0.15)  -- 0.15초마다 불 파편 생성
+										end
+									end)
+								end
+
+								-- FireDensity 감소 (밀도 시스템: 토네이도에 빨려들수록 감소)
+								local currentFireDensity = child:GetAttribute("FireDensity") or 100
+								local fireDensityDrain = 5  -- 틱당 밀도 감소량 (0.05초마다 5% = 초당 100%)
+								local newFireDensity = math.max(0, currentFireDensity - fireDensityDrain)
+								child:SetAttribute("FireDensity", newFireDensity)
+
+								-- 밀도에 비례해서 불 크기 줄이기
+								local densityRatio = newFireDensity / 100
+								for _, fireEffect in fireParts do
+									if fireEffect and fireEffect.Parent then
+										local baseSize = fireEffect:GetAttribute("BaseSize")
+										if not baseSize then
+											baseSize = fireEffect.Size
+											fireEffect:SetAttribute("BaseSize", baseSize)
+										end
+										fireEffect.Size = math.max(1, baseSize * densityRatio)
+									end
+								end
+
+								-- 밀도가 0이면 기름불 소멸
+								if newFireDensity <= 0 then
+									child:Destroy()
 								end
 							end
 						end

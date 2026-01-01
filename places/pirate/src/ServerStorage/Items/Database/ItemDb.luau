@@ -143,7 +143,7 @@ ItemDb.Tool = {
 		MaxStack = 1,
 
 		Damage = 15,
-		DotDamage = 10,
+		DotDamage = 5,
 		Cooldown = 1,
 		ThrowType = "ChargingThrowType",
 		MaxRange = 140,

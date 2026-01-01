@@ -16,6 +16,20 @@ local RunService = game:GetService("RunService")
 
 local TrailDb = require(script.Parent.Parent.Database.TrailDb)
 
+-- CoinService 지연 로딩
+local CoinService = nil
+local function getCoinService()
+	if not CoinService then
+		local success, result = pcall(function()
+			return require(script.Parent.CoinService).getInstance()
+		end)
+		if success then
+			CoinService = result
+		end
+	end
+	return CoinService
+end
+
 local TrailShopService = {}
 TrailShopService.__index = TrailShopService
 
@@ -79,6 +93,11 @@ function TrailShopService:Initialize()
 		end)
 	end
 
+	-- 미리보기 배럴 모델 미리 로드
+	task.spawn(function()
+		self:LoadPreviewBarrelModel()
+	end)
+
 	print("[TrailShopService] 초기화 완료")
 end
 
@@ -118,6 +137,14 @@ function TrailShopService:SetupRemotes()
 	local trailUpdateEvent = Instance.new("RemoteEvent")
 	trailUpdateEvent.Name = "TrailDataUpdated"
 	trailUpdateEvent.Parent = trailFolder
+
+	-- Trail 에셋 로드 요청 (미리보기용)
+	local loadTrailAssetFunc = Instance.new("RemoteFunction")
+	loadTrailAssetFunc.Name = "LoadTrailAsset"
+	loadTrailAssetFunc.Parent = trailFolder
+	loadTrailAssetFunc.OnServerInvoke = function(player, trailName)
+		return self:LoadTrailAsset(trailName)
+	end
 end
 
 function TrailShopService:SetupMarketplace()
@@ -271,7 +298,7 @@ function TrailShopService:EquipTrail(player, barrelName, trailName)
 	}
 end
 
--- 구매 요청 (Developer Product 구매 팝업)
+-- 구매 요청 (코인 또는 로벅스)
 function TrailShopService:RequestPurchase(player, trailName)
 	local trailInfo = TrailDb.GetTrailByName(trailName)
 	if not trailInfo then
@@ -284,26 +311,48 @@ function TrailShopService:RequestPurchase(player, trailName)
 		return { success = false, message = "이미 소유한 Trail입니다." }
 	end
 
-	-- Developer Product가 없는 경우 (무료 아이템 또는 미설정)
-	if not trailInfo.ProductId then
-		-- Studio 환경에서는 무료로 지급 (테스트용)
-		if isStudio then
-			return self:GrantTrail(player, trailName)
+	-- 코인 가격이 있으면 코인으로 구매
+	if trailInfo.CoinPrice and trailInfo.CoinPrice > 0 then
+		local coinService = getCoinService()
+		if not coinService then
+			return { success = false, message = "코인 시스템을 사용할 수 없습니다." }
 		end
-		return { success = false, message = "구매할 수 없는 Trail입니다." }
+
+		-- 코인 충분한지 확인
+		if not coinService:HasEnoughCoins(player, trailInfo.CoinPrice) then
+			return { success = false, message = "코인이 부족합니다. (필요: " .. trailInfo.CoinPrice .. ")" }
+		end
+
+		-- 코인 차감
+		local success, result = coinService:SpendCoins(player, trailInfo.CoinPrice)
+		if not success then
+			return { success = false, message = result }
+		end
+
+		-- Trail 지급
+		return self:GrantTrail(player, trailName)
 	end
 
-	-- 구매 팝업 표시
-	local success, err = pcall(function()
-		MarketplaceService:PromptProductPurchase(player, trailInfo.ProductId)
-	end)
+	-- 로벅스 구매 (ProductId가 있는 경우)
+	if trailInfo.ProductId then
+		local success, err = pcall(function()
+			MarketplaceService:PromptProductPurchase(player, trailInfo.ProductId)
+		end)
 
-	if not success then
-		warn("[TrailShopService] 구매 창 열기 실패:", err)
-		return { success = false, message = "구매 창을 열 수 없습니다." }
+		if not success then
+			warn("[TrailShopService] 구매 창 열기 실패:", err)
+			return { success = false, message = "구매 창을 열 수 없습니다." }
+		end
+
+		return { success = true, message = "구매 창을 열었습니다." }
 	end
 
-	return { success = true, message = "구매 창을 열었습니다." }
+	-- 무료 아이템
+	if not trailInfo.CoinPrice or trailInfo.CoinPrice == 0 then
+		return self:GrantTrail(player, trailName)
+	end
+
+	return { success = false, message = "구매할 수 없는 Trail입니다." }
 end
 
 -- Trail 지급 (내부용)
@@ -406,6 +455,138 @@ function TrailShopService:GetTeleportTrailData(player)
 		EquippedTrails = data.EquippedTrails,
 		OwnedTrails = data.OwnedTrails,
 	}
+end
+
+-- Trail 에셋 저장 폴더 (클라이언트가 접근 가능)
+local trailAssetsFolder = nil
+
+local function getTrailAssetsFolder()
+	if not trailAssetsFolder then
+		trailAssetsFolder = ReplicatedStorage:FindFirstChild("TrailAssets")
+		if not trailAssetsFolder then
+			trailAssetsFolder = Instance.new("Folder")
+			trailAssetsFolder.Name = "TrailAssets"
+			trailAssetsFolder.Parent = ReplicatedStorage
+		end
+	end
+	return trailAssetsFolder
+end
+
+-- 미리보기 배럴 모델 에셋 ID
+local PREVIEW_BARREL_ASSET_ID = 3678395320
+
+-- 미리보기 배럴 모델 로드 (서버 초기화 시 한 번만)
+function TrailShopService:LoadPreviewBarrelModel()
+	local InsertService = game:GetService("InsertService")
+	local assetsFolder = getTrailAssetsFolder()
+
+	-- 이미 로드되어 있는지 확인
+	local existing = assetsFolder:FindFirstChild("PreviewBarrel")
+	if existing then
+		print("[TrailShopService] 미리보기 배럴 모델 이미 존재")
+		return
+	end
+
+	print("[TrailShopService] 미리보기 배럴 모델 로드 시도:", PREVIEW_BARREL_ASSET_ID)
+
+	local success, result = pcall(function()
+		return InsertService:LoadAsset(PREVIEW_BARREL_ASSET_ID)
+	end)
+
+	if success and result then
+		-- 모델 또는 파트 찾기
+		local model = result:FindFirstChildWhichIsA("Model") or result:FindFirstChildWhichIsA("BasePart")
+		if model then
+			model = model:Clone()
+			model.Name = "PreviewBarrel"
+			model.Parent = assetsFolder
+			print("[TrailShopService] 미리보기 배럴 모델 로드 완료")
+		else
+			warn("[TrailShopService] 배럴 에셋에서 Model/BasePart를 찾을 수 없음")
+		end
+		result:Destroy()
+	else
+		warn("[TrailShopService] 미리보기 배럴 모델 로드 실패:", result)
+	end
+end
+
+-- Trail 에셋 로드 (미리보기용) - ReplicatedStorage에 저장 후 이름 반환
+local trailAssetCache = {} -- trailName -> true (로드 완료 여부)
+
+function TrailShopService:LoadTrailAsset(trailName)
+	local InsertService = game:GetService("InsertService")
+
+	local trailInfo = TrailDb.GetTrailByName(trailName)
+	if not trailInfo then
+		warn("[TrailShopService] Trail 정보 없음:", trailName)
+		return nil
+	end
+
+	if not trailInfo.AssetId then
+		warn("[TrailShopService] AssetId 없음:", trailName)
+		return nil
+	end
+
+	local assetsFolder = getTrailAssetsFolder()
+
+	-- 이미 ReplicatedStorage에 있는지 확인
+	local existingAsset = assetsFolder:FindFirstChild(trailName)
+	if existingAsset then
+		return trailName -- 이름만 반환 (클라이언트가 ReplicatedStorage에서 가져감)
+	end
+
+	-- 캐시 확인 (로드 진행 중 중복 방지)
+	if trailAssetCache[trailName] then
+		return trailName
+	end
+
+	print("[TrailShopService] 에셋 로드 시도:", trailName, "AssetId:", trailInfo.AssetId)
+
+	-- InsertService로 에셋 로드
+	local success, result = pcall(function()
+		return InsertService:LoadAsset(trailInfo.AssetId)
+	end)
+
+	if not success then
+		warn("[TrailShopService] InsertService:LoadAsset 실패:", trailName, "AssetId:", trailInfo.AssetId, "에러:", result)
+		return nil
+	end
+
+	print("[TrailShopService] 에셋 로드 성공:", trailName)
+
+	-- 로드된 모델에서 Trail/ParticleEmitter 찾기
+	local assetModel = result
+	local trailObject = nil
+
+	-- 디버그: 에셋 구조 출력
+	print("[TrailShopService] 에셋 구조 (", trailName, "):")
+	for _, child in ipairs(assetModel:GetDescendants()) do
+		print("  -", child.Name, ":", child.ClassName)
+	end
+
+	for _, child in ipairs(assetModel:GetDescendants()) do
+		-- Trail, ParticleEmitter, Fire, Smoke, Sparkles 등 이펙트 클래스 지원
+		if child:IsA("Trail") or child:IsA("ParticleEmitter") or child:IsA("Fire") or child:IsA("Smoke") or child:IsA("Sparkles") then
+			trailObject = child:Clone()
+			print("[TrailShopService] 이펙트 발견:", child.Name, child.ClassName)
+			break
+		end
+	end
+
+	-- 에셋 정리
+	assetModel:Destroy()
+
+	if trailObject then
+		-- ReplicatedStorage에 저장 (클라이언트 접근용)
+		trailObject.Name = trailName
+		trailObject.Parent = assetsFolder
+		trailAssetCache[trailName] = true
+		print("[TrailShopService] ReplicatedStorage에 저장 완료:", trailName)
+		return trailName
+	end
+
+	warn("[TrailShopService] Trail/ParticleEmitter를 찾을 수 없음:", trailName)
+	return nil
 end
 
 return TrailShopService

@@ -28,13 +28,19 @@ local CONFIG = {
 	END_DELAY = 10,            -- 게임 종료 후 로비 이동까지 시간
 	BROADCAST_INTERVAL = 1,    -- 로비로 상태 전송 간격 (초) - 1초로 변경하여 실시간 카운트다운 표시
 	RESTART_DELAY = 5,         -- 게임 종료 후 다음 게임까지 대기 시간
-	-- 골드 보상 설정
+	-- 코인 보상 설정 (영구 저장용)
+	COIN_PER_KILL = 10,        -- 킬 당 코인
+	COIN_PER_ASSIST = 5,       -- 어시스트 당 코인
+	COIN_PARTICIPATION = 20,   -- 참가 보너스 코인
+	COIN_WINNER_BONUS = 30,    -- 승리팀 보너스 코인
+	-- 인게임 골드 보상 설정 (표시용)
 	GOLD_PER_KILL = 50,        -- 킬 당 골드
 	GOLD_PER_ASSIST = 20,      -- 어시스트 당 골드
 }
 
 local LOBBY_PLACE_ID = 18517272972
 local MATCH_STATUS_TOPIC = "MatchStatus"
+local COIN_REWARD_TOPIC = "CoinReward"
 local isStudio = RunService:IsStudio()
 
 function MatchController:Initialize()
@@ -430,6 +436,9 @@ function MatchController:endMatch(winningTeam)
 	ReplicatedStorage.GameEnd:FireAllClients(results)
 	print("[MatchController] 매치 종료! 승리: " .. (winningTeam or "무승부"))
 
+	-- 코인 보상 계산 및 전송
+	self:sendCoinRewards(winningTeam)
+
 	-- 종료 카운트다운 시작
 	self.endCountdown = CONFIG.RESTART_DELAY
 	self:broadcastGameState()
@@ -616,6 +625,68 @@ function MatchController:broadcastLoop()
 		pcall(function()
 			MessagingService:PublishAsync(MATCH_STATUS_TOPIC, jsonData)
 		end)
+	end
+end
+
+-- 코인 보상 계산 및 로비로 전송
+function MatchController:sendCoinRewards(winningTeam)
+	if isStudio then
+		print("[MatchController] 스튜디오 환경 - 코인 보상 시뮬레이션")
+		for _, player in ipairs(Players:GetPlayers()) do
+			local kills = self.kills[player.Name] or 0
+			local assists = self.assists[player.Name] or 0
+			local isWinner = player.Team and player.Team.Name == winningTeam
+			local totalCoins = CONFIG.COIN_PARTICIPATION
+				+ (kills * CONFIG.COIN_PER_KILL)
+				+ (assists * CONFIG.COIN_PER_ASSIST)
+				+ (isWinner and CONFIG.COIN_WINNER_BONUS or 0)
+			print(string.format("[CoinReward] %s: %d 코인 (킬:%d, 어시스트:%d, 승리:%s)",
+				player.Name, totalCoins, kills, assists, tostring(isWinner)))
+		end
+		return
+	end
+
+	-- 각 플레이어별 보상 계산
+	local rewards = {}
+	for _, player in ipairs(Players:GetPlayers()) do
+		local kills = self.kills[player.Name] or 0
+		local assists = self.assists[player.Name] or 0
+		local isWinner = player.Team and player.Team.Name == winningTeam
+
+		-- 코인 계산
+		local totalCoins = CONFIG.COIN_PARTICIPATION
+			+ (kills * CONFIG.COIN_PER_KILL)
+			+ (assists * CONFIG.COIN_PER_ASSIST)
+			+ (isWinner and CONFIG.COIN_WINNER_BONUS or 0)
+
+		table.insert(rewards, {
+			odIresU = player.UserId, -- UserId (난독화)
+			coins = totalCoins,
+			kills = kills,
+			assists = assists,
+			winner = isWinner
+		})
+
+		print(string.format("[CoinReward] %s (UserId:%d): %d 코인",
+			player.Name, player.UserId, totalCoins))
+	end
+
+	-- MessagingService로 로비에 전송
+	local rewardData = {
+		roomId = self.roomId,
+		rewards = rewards,
+		timestamp = os.time()
+	}
+
+	local jsonData = HttpService:JSONEncode(rewardData)
+	local success, err = pcall(function()
+		MessagingService:PublishAsync(COIN_REWARD_TOPIC, jsonData)
+	end)
+
+	if success then
+		print("[MatchController] 코인 보상 데이터 전송 완료")
+	else
+		warn("[MatchController] 코인 보상 전송 실패:", err)
 	end
 end
 

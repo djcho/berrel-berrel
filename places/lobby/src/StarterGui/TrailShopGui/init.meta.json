@@ -3,6 +3,9 @@
   "properties": {
     "ResetOnSpawn": false,
     "ZIndexBehavior": "Sibling",
+    "IgnoreGuiInset": true,
+    "DisplayOrder": 100,
+    "ScreenInsets": "None",
     "Enabled": false
   }
 }
